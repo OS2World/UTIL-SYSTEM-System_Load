@@ -1,0 +1,39 @@
+#include "..\plugin.rc"
+#include "drives.h"
+
+ICON IDI_AUDIOCD		audiocd.ico
+ICON IDI_CD			cd.ico
+ICON IDI_FLOPPY			floppy.ico
+ICON IDI_HDD			hdd.ico
+ICON IDI_TAPE			tape.ico
+ICON IDI_UNKNOWN		unknown.ico
+ICON IDI_VDISK			vdisk.ico
+ICON IDI_REMOTE			remote.ico
+
+STRINGTABLE PRELOAD
+{
+  IDS_FLD_LETTER	"Letter"
+  IDS_FLD_TOTAL		"Total bytes"
+  IDS_FLD_FREE		"Free bytes"
+  IDS_FLD_FILESYSTEM	"File System"
+  IDS_FLD_LABEL		"Label"
+  IDS_BAR_CAPTION	"%1 free from %2"
+  IDS_DTL_LETTER	"Drive letter:"
+  IDS_DTL_LABEL		"Label:"
+  IDS_DTL_FILESYSTEM	"File system:"
+  IDS_DTL_TOTAL		"Total bytes:"
+  IDS_DTL_FREE		"Free bytes:"
+  IDS_MI_OPEN		"~Open"
+  IDS_MI_EJECT		"~Eject"
+}
+
+DLGTEMPLATE IDD_DSPROPERTIES
+{
+  DIALOG  "Drives", IDD_DSPROPERTIES, 0, 0, 240, 146,
+          FS_NOBYTEALIGN | NOT FS_DLGBORDER
+          PRESPARAMS PP_FONTNAMESIZE, "9.WarpSans"
+  {
+    CONTROL "~Show floppy drives", IDD_CB_SHOWFLOPPY, 5, 5, 150, 8, WC_BUTTON,
+            BS_AUTOCHECKBOX | WS_VISIBLE | WS_GROUP | WS_TABSTOP
+  }
+}
