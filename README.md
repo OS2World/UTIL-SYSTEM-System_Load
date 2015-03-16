@@ -3,7 +3,7 @@ Monitoring the status of various system components. Modular platform to display 
 
 LICENSE
 ===============
-* Not Specified
+* BSD 3 Clauses
 
 COMPILE TOOLS
 ===============
