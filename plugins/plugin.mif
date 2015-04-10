@@ -9,7 +9,7 @@
 !endif
 
 
-!ifdef RCTK
+!ifeq RCTK 1
 
 # You can use Resource Compiler from IBM OS/2 Developer's Toolkit.
 # WMAKE rctk=1

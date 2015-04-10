@@ -255,7 +255,6 @@ VOID dlgSettings(HWND hwndOwner)
     debug( "WinLoadDlg() fail" );
     return;
   }
-  ctrlSubclassNotebook( hwndDlg );
 
   WinProcessDlg( hwndDlg );
   WinDestroyWindow( hwndDlg );

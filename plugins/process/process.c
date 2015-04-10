@@ -7,9 +7,9 @@
 #include <string.h>
 #include <ds.h>
 #include <sl.h>
+#include <debug.h>
 #include "process.h"
 #include "sysstate.h"
-#include "debug.h"
 
 #define UPDATE_INTERVAL		1000
 

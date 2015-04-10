@@ -4,9 +4,6 @@
 #define ITEM_VPAD		10
 #define ITEM_HPAD		5
 
-#define MAX_ITEMS		300
-
-
 // INI-file
 // --------
 

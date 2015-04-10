@@ -5,10 +5,10 @@ PLUGIN = drives
 AUTOR = Andrey Vasilkin
 
 # VERSION - optional
-VERSION = 1.0.0
+VERSION = 1.0.1
 
 # COMMENT - optional
-COMMENT = SystemLoad plugin. Disk drivers monitor.
+COMMENT = SystemLoad plugin. Drives monitor.
 
 # LIBPATH - optional
 #LIBPATH = D:\my\lib\path

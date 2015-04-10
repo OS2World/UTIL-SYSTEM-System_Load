@@ -13,10 +13,10 @@
 #include <ctype.h>
 #include <ds.h>
 #include <sl.h>
+#include <debug.h>
 #include "process.h"
 #include "bldlevel.h"
 #include "sysstate.h"
-#include "debug.h"
 
 extern HMODULE		hDSModule;	// Module handle, process.c.
 extern HAB		hab;		// process.c.
@@ -646,7 +646,7 @@ static VOID _pgModulesAddModules(HWND hwndCnt, BOOL fSubLevel,
   pRecords = (PMODULERECORD)WinSendMsg( hwndCnt, CM_ALLOCRECORD,
                    MPFROMLONG( sizeof(MODULERECORD) - sizeof(RECORDCORE) ),
                    MPFROMLONG( stModule.cModules ) );
-  if ( pRecord == NULL )
+  if ( pRecords == NULL )
   {
     debug( "CM_ALLOCRECORD returns 0" );
     return;

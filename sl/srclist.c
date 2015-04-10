@@ -332,7 +332,7 @@ VOID srclstInit(HAB hab)
                      utilTestFont( "WarpSans" ) ?
                      "9.WarpSans" : "8.Helvetica Bold";
 
-  cbPath = utilQueryProgPath( &szBuf, sizeof(szBuf) );
+  cbPath = utilQueryProgPath( sizeof(szBuf), &szBuf );
   strcpy( &szBuf[cbPath], "*.dll" );
 
   // Find first *.DLL file

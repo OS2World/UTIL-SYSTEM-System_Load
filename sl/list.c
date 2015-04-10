@@ -17,11 +17,30 @@
 extern HINI		hIni;		// sl.c
 extern HWND		hwndMain;	// sl.c
 
-static MRESULT _wmCreate(HWND hwnd)
-{
-  PVOID		pCtxMenu;
+typedef struct _LISTWINDATA {
+  LONG		lScrollPos;
+  HWND		hwndHint;
   HWND		hwndCtxMenu;
   PSHORT	psCtxMenuStaticItems;
+} LISTWINDATA, *PLISTWINDATA;
+
+
+static VOID _freeListWinData(PLISTWINDATA pstWinData)
+{
+  WinDestroyWindow( pstWinData->hwndCtxMenu );
+
+  if ( pstWinData->psCtxMenuStaticItems != NULL )
+    debugFree( pstWinData->psCtxMenuStaticItems );
+
+  hintDestroy( pstWinData->hwndHint );
+
+  debugFree( pstWinData );
+}
+
+static MRESULT _wmCreate(HWND hwnd)
+{
+  PLISTWINDATA	pstWinData;
+  PVOID		pCtxMenu;
   ULONG		ulRC;
   ULONG		cItems;
   ULONG		ulIdx;
@@ -34,62 +53,63 @@ static MRESULT _wmCreate(HWND hwnd)
     return (MRESULT)TRUE;		// Discontinue window creation
   }
 
+  pstWinData = debugCAlloc( 1, sizeof(LISTWINDATA) );
+
   // Create context menu
-  hwndCtxMenu = WinCreateMenu( HWND_DESKTOP, pCtxMenu );
-  WinSetWindowULong( hwnd, 8, hwndCtxMenu );
+  pstWinData->hwndCtxMenu = WinCreateMenu( HWND_DESKTOP, pCtxMenu );
   DosFreeResource( pCtxMenu );
 
   // Store context menu top-level items IDs
 
-  cItems = (SHORT)WinSendMsg( hwndCtxMenu, MM_QUERYITEMCOUNT, 0, 0 );
-  psCtxMenuStaticItems = debugMAlloc( (cItems + 1) * sizeof(ULONG) );
-  if ( psCtxMenuStaticItems == NULL )
+  cItems = (SHORT)WinSendMsg( pstWinData->hwndCtxMenu, MM_QUERYITEMCOUNT, 0, 0 );
+  pstWinData->psCtxMenuStaticItems = debugMAlloc( (cItems + 1) * sizeof(ULONG) );
+  if ( pstWinData->psCtxMenuStaticItems == NULL )
     debug( "Warning! Not enough memory" );
   else
   {
     for( ulIdx = 0; ulIdx < cItems; ulIdx++ )
     {
-      psCtxMenuStaticItems[ulIdx] =
-        (SHORT)WinSendMsg( hwndCtxMenu, MM_ITEMIDFROMPOSITION,
+      pstWinData->psCtxMenuStaticItems[ulIdx] =
+        (SHORT)WinSendMsg( pstWinData->hwndCtxMenu, MM_ITEMIDFROMPOSITION,
                            MPFROMSHORT( ulIdx ), 0 );
     }
-    psCtxMenuStaticItems[ulIdx] = MIT_ERROR; // end of list mark
-    WinSetWindowPtr( hwnd, 12, psCtxMenuStaticItems );
+    pstWinData->psCtxMenuStaticItems[ulIdx] = MIT_ERROR; // end of list mark
   }
 
   // Create hint window and store handle
-  WinSetWindowULong( hwnd, 4, hintCreate( hwnd ) );
+  pstWinData->hwndHint = hintCreate( hwnd );
 
   // Register items window class, start update thread.
   if ( !itemsInit( WinQueryAnchorBlock( hwnd ) ) )
   {
     debug( "itemsInit() fail" );
+    _freeListWinData( pstWinData );
     return (MRESULT)TRUE;		// Discontinue window creation
   }
 
+  WinSetWindowPtr( hwnd, 0, pstWinData );
   return (MRESULT)FALSE; // Success code.
 }
 
 static VOID _wmDestroy(HWND hwnd)
 {
-  PSHORT	psCtxMenuStaticItems = (PSHORT)WinQueryWindowPtr( hwnd, 12 );
+  PLISTWINDATA	pstWinData = (PLISTWINDATA)WinQueryWindowPtr( hwnd, 0 );
 
   // Stop update thread
   itemsDone();
-  // Destroy hint window
-  hintDestroy( WinQueryWindowULong( hwnd, 4 ) );
-  // Destroy context menu
-  WinDestroyWindow( WinQueryWindowULong( hwnd, 8 ) );
-  if ( psCtxMenuStaticItems != NULL )
-    debugFree( psCtxMenuStaticItems );
+
+  // Destroy hint window, context menu, e.t.c.
+  _freeListWinData( pstWinData );
 }
 
 static VOID _wmSLOrederItems(HWND hwnd)
 {
   // Calculate the position of all items windows. Clear the space therebetween.
 
+  PLISTWINDATA		pstWinData = (PLISTWINDATA)WinQueryWindowPtr( hwnd, 0 );
   HWND			hwndItem;
-  SWP			swpList, aswpItem[MAX_ITEMS], *pswpItem = &aswpItem;
+  SWP			swpList;
+  PSWP			paswpItem = NULL, pswpItem;
   ULONG			cItems = 0;
   ULONG			ulLeftOffs;
   LONG			lTop, lTopOffs;
@@ -98,7 +118,7 @@ static VOID _wmSLOrederItems(HWND hwnd)
   HRGN			hrgnValid, hrgnInvalid, hrgnUpdate;
   HPS			hps;
   RECTL			rectlListFrame;
-  RECTL			arectlItem[MAX_ITEMS], *prectlItem = &arectlItem;
+  PRECTL		parectlItem, prectlItem;
   LONG			lScrollPos = 0;
   ULONG			ulIdx;
   LONG			lMax = 0;
@@ -106,6 +126,7 @@ static VOID _wmSLOrederItems(HWND hwnd)
   HWND			hwndScroll = WinWindowFromID( hwndListFrame,
                                                       FID_HORZSCROLL );
   SIZEL			sizeSpace;
+  HENUM			hEnum;
 
   itemsGetSpace( &sizeSpace );
   ulLeftOffs = sizeSpace.cx;
@@ -117,9 +138,23 @@ static VOID _wmSLOrederItems(HWND hwnd)
 
   // Scan items, calculate new positions
 
-  for( hwndItem = WinQueryWindow( hwnd, QW_TOP ); hwndItem != NULLHANDLE;
-       hwndItem = WinQueryWindow( hwndItem, QW_NEXT ), pswpItem++ )
+  hEnum = WinBeginEnumWindows( hwnd );
+  while( ( hwndItem = WinGetNextWindow( hEnum ) ) != NULLHANDLE )
   {
+    if ( ( cItems == 0 ) || ( (cItems & 0x00FF) == 0x00FF ) )
+    {
+      PSWP	paswpItemNew =
+         debugReAlloc( paswpItem, (cItems & ~0x00FF) + 0x0100 * sizeof(SWP) );
+
+      if ( paswpItemNew == NULL )
+      {
+        debug( "Not enough memory" );
+        break;
+      }
+      paswpItem = paswpItemNew;
+      pswpItem = &paswpItem[cItems];
+    }
+
     WinQueryWindowPos( hwndItem, pswpItem );
 
     // Calculate new itam's position
@@ -143,9 +178,10 @@ static VOID _wmSLOrederItems(HWND hwnd)
     lTopOffs -= ( pswpItem->cy + sizeSpace.cy );
 
     // Next item...
-    if ( (++cItems) == MAX_ITEMS )
-      break;
+    cItems++;
+    pswpItem++;
   }
+  WinEndEnumWindows( hEnum );
 
   // Set scroll bar
 
@@ -153,13 +189,13 @@ static VOID _wmSLOrederItems(HWND hwnd)
   {
     LONG		lMaxScroll;
 
-    lMax = aswpItem[cItems - 1].x + ulColWidth;
+    lMax = paswpItem[cItems - 1].x + ulColWidth;
     lMaxScroll = lMax - swpList.cx;
     if ( lMax <= swpList.cx )
       lScrollPos = 0;
     else
     {
-      lScrollPos = (LONG)WinQueryWindowULong( hwnd, 0 );
+      lScrollPos = pstWinData->lScrollPos;
       if ( lScrollPos > lMaxScroll )
         lScrollPos = lMaxScroll;
     }
@@ -169,28 +205,45 @@ static VOID _wmSLOrederItems(HWND hwnd)
   }
   // Set scroll bar slider size or disable scroll bar
   WinSendMsg( hwndScroll, SBM_SETTHUMBSIZE, MPFROM2SHORT(swpList.cx, lMax), 0 );
-  WinSetWindowULong( hwnd, 0, lScrollPos );
+  pstWinData->lScrollPos = lScrollPos;
 
-  // Change coordinates of items by scroll bar position
+  // Change coordinates of items by scroll bar position. Build array of window
+  // rectangles for all items.
 
-  for( ulIdx = 0, pswpItem = &aswpItem; ulIdx < cItems;
-       ulIdx++, pswpItem++, prectlItem++ )
+  parectlItem = debugMAlloc( cItems * sizeof(RECTL) );
+  if ( parectlItem == NULL )
+    debug( "Not enough memory" );
+  else
   {
-    pswpItem->x -= lScrollPos;
-    // Calc rectangle of item in frame-window's coordinates
-    ptlItem.x = pswpItem->x;
-    ptlItem.y = pswpItem->y;
-    WinMapWindowPoints( hwnd, hwndListFrame, &ptlItem, 1 );
-    prectlItem->xLeft = ptlItem.x;
-    prectlItem->yBottom = ptlItem.y;
-    prectlItem->xRight = ptlItem.x + pswpItem->cx;
-    prectlItem->yTop = ptlItem.y + pswpItem->cy;
+    for( ulIdx = 0, pswpItem = paswpItem, prectlItem = parectlItem;
+         ulIdx < cItems; ulIdx++, pswpItem++, prectlItem++ )
+    {
+      pswpItem->x -= lScrollPos;
+      // Calc rectangle of item in frame-window's coordinates
+      ptlItem.x = pswpItem->x;
+      ptlItem.y = pswpItem->y;
+      WinMapWindowPoints( hwnd, hwndListFrame, &ptlItem, 1 );
+      prectlItem->xLeft = ptlItem.x;
+      prectlItem->yBottom = ptlItem.y;
+      prectlItem->xRight = ptlItem.x + pswpItem->cx;
+      prectlItem->yTop = ptlItem.y + pswpItem->cy;
+    }
   }
 
   // Move reordered items windows
-  WinSetMultWindowPos( WinQueryAnchorBlock( hwnd ), &aswpItem, cItems );
+  if ( paswpItem != NULL )
+  {
+    WinSetMultWindowPos( WinQueryAnchorBlock( hwnd ), paswpItem, cItems );
+    debugFree( paswpItem );
+  }
 
   // Update (erase) not used window area.
+
+  if ( parectlItem == NULL )
+  {
+    WinInvalidateRegion( hwndListFrame, NULLHANDLE, TRUE );
+    return;
+  }
 
   hps = WinGetPS( hwndListFrame );
 
@@ -199,7 +252,8 @@ static VOID _wmSLOrederItems(HWND hwnd)
   hrgnInvalid = GpiCreateRegion( hps, 1, &rectlListFrame );
 
   // hrgnValid - rectangles of items
-  hrgnValid = GpiCreateRegion( hps, cItems, &arectlItem );
+  hrgnValid = GpiCreateRegion( hps, cItems, parectlItem );
+  debugFree( parectlItem );
 
   // hrgnUpdate - region to update is ( hrgnInvalid AND NOT hrgnValid )
   hrgnUpdate = GpiCreateRegion( hps, 0, NULL );
@@ -241,6 +295,7 @@ static VOID _checkSortDirectionItems(HWND hwndMenu, ULONG ulSort)
 
 static MRESULT _wmSLSetDataSrc(HWND hwnd, MPARAM mp1, MPARAM mp2)
 {
+  PLISTWINDATA	pstWinData = (PLISTWINDATA)WinQueryWindowPtr( hwnd, 0 );
   PDATASOURCE	pDataSrc = (PDATASOURCE)PVOIDFROMMP( mp1 );
   PDATASOURCE	pOldDataSrc = itemsGetDataSrc();
   CHAR		szBuf[256];
@@ -248,7 +303,8 @@ static MRESULT _wmSLSetDataSrc(HWND hwnd, MPARAM mp1, MPARAM mp2)
   MENUITEM	stMISort;
   MENUITEM	stMICtxSort;
   MENUITEM	stMINew;
-  HWND		hwndFrame, hwndMenu, hwndCtxMenu;
+  HWND		hwndFrame, hwndMenu;
+  HWND		hwndCtxMenu = pstWinData->hwndCtxMenu;
   ULONG		ulSort;
   ULONG		ulIdx;
 
@@ -268,7 +324,6 @@ static MRESULT _wmSLSetDataSrc(HWND hwnd, MPARAM mp1, MPARAM mp2)
 
   hwndFrame = WinQueryWindow( hwndMain, QW_PARENT );
   hwndMenu = WinWindowFromID( hwndFrame, FID_MENU );
-  hwndCtxMenu =  WinQueryWindowULong( hwnd, 8 );
 
   // Set window title (static part + ": " + menu item title)
   // Load static part
@@ -397,12 +452,12 @@ static VOID _wmSLContextMenu(HWND hwnd, MPARAM mp1, MPARAM mp2)
 {
   PPOINTS		pPt = (PPOINTS)&mp1;
   ULONG			ulDataSrcItem = LONGFROMMP( mp2 );
-  HWND			hwndCtxMenu = WinQueryWindowULong( hwnd, 8 );
+  PLISTWINDATA		pstWinData = (PLISTWINDATA)WinQueryWindowPtr( hwnd, 0 );
+  HWND			hwndCtxMenu = pstWinData->hwndCtxMenu;
   SHORT			sIdx, sItemId;
   BOOL			fFound;
   ULONG			ulIdx;
-  PSHORT		psCtxMenuStaticItems =
-                          (PSHORT)WinQueryWindowPtr( hwnd, 12 );
+  PSHORT		psCtxMenuStaticItems = pstWinData->psCtxMenuStaticItems;
 
   // Remove all not static items from context menu which remains from
   // previous function itemsFillContextMenu() call.
@@ -518,7 +573,7 @@ MRESULT EXPENTRY ListWndProc(HWND hwnd, ULONG msg, MPARAM mp1, MPARAM mp2)
           ULONG		ulIdx;
           HWND		hwndFrame = WinQueryWindow( hwndMain, QW_PARENT );
           HWND		hwndMenu = WinWindowFromID( hwndFrame, FID_MENU );
-          HWND		hwndCtxMenu = WinQueryWindowULong( hwnd, 8 );
+          PLISTWINDATA	pstWinData = (PLISTWINDATA)WinQueryWindowPtr( hwnd, 0 );
           // Query current sort type from selected data source
           ULONG		ulSort = itemsSortBy( DSSORT_QUERY );
 
@@ -544,7 +599,7 @@ MRESULT EXPENTRY ListWndProc(HWND hwnd, ULONG msg, MPARAM mp1, MPARAM mp2)
                             (ulSort & DSSORT_VALUE_MASK) == ulIdx ?
                               MIA_CHECKED : 0 ) );
 
-            WinSendMsg( hwndCtxMenu, MM_SETITEMATTR,
+            WinSendMsg( pstWinData->hwndCtxMenu, MM_SETITEMATTR,
               MPFROM2SHORT( (ulIdx + IDM_SORT_FIRST_ID), TRUE ),
               MPFROM2SHORT( MIA_CHECKED,
                             (ulSort & DSSORT_VALUE_MASK) == ulIdx ?
@@ -552,7 +607,7 @@ MRESULT EXPENTRY ListWndProc(HWND hwnd, ULONG msg, MPARAM mp1, MPARAM mp2)
           }
 
           _checkSortDirectionItems( hwndMenu, ulSort );
-          _checkSortDirectionItems( hwndCtxMenu, ulSort );
+          _checkSortDirectionItems( pstWinData->hwndCtxMenu, ulSort );
           WinPostMsg( hwnd, WM_SL_SETDATASRC, 0, 0 );
 
           return (MRESULT)FALSE;
@@ -636,7 +691,7 @@ MRESULT EXPENTRY ListWndProc(HWND hwnd, ULONG msg, MPARAM mp1, MPARAM mp2)
       
     case WM_HSCROLL:
       {
-        LONG		lScrollPos = (LONG)WinQueryWindowULong( hwnd, 0 );
+        PLISTWINDATA	pstWinData = (PLISTWINDATA)WinQueryWindowPtr( hwnd, 0 );
         SWP		swpList;
 
         WinQueryWindowPos( hwnd, &swpList );
@@ -644,29 +699,28 @@ MRESULT EXPENTRY ListWndProc(HWND hwnd, ULONG msg, MPARAM mp1, MPARAM mp2)
         switch( SHORT2FROMMP( mp2 ) )
         {
           case SB_LINELEFT:
-             lScrollPos -= 10;
+             pstWinData->lScrollPos -= 10;
              break;
           case SB_PAGELEFT:
-             lScrollPos -= swpList.cx;
+             pstWinData->lScrollPos -= swpList.cx;
              break;
           case SB_LINERIGHT:
-             lScrollPos += 10;
+             pstWinData->lScrollPos += 10;
              break;
           case SB_PAGERIGHT:
-             lScrollPos += swpList.cx;
+             pstWinData->lScrollPos += swpList.cx;
              break;
           case SB_SLIDERPOSITION:
           case SB_SLIDERTRACK:
-             lScrollPos = SHORT1FROMMP( mp2 );
+             pstWinData->lScrollPos = SHORT1FROMMP( mp2 );
              break;
           case SB_SL_SLIDEROFFSET:
-             lScrollPos += (SHORT)SHORT1FROMMP( mp2 );
+             pstWinData->lScrollPos += (SHORT)SHORT1FROMMP( mp2 );
              break;
         }
 
-        if ( lScrollPos < 0 )
-          lScrollPos = 0;
-        WinSetWindowULong( hwnd, 0, lScrollPos );
+        if ( pstWinData->lScrollPos < 0 )
+          pstWinData->lScrollPos = 0;
       } // Go to WM_SL_ORDERITEMS
 
     case WM_SL_ORDERITEMS:
@@ -682,10 +736,15 @@ MRESULT EXPENTRY ListWndProc(HWND hwnd, ULONG msg, MPARAM mp1, MPARAM mp2)
       return (MRESULT)FALSE;
 
     case WM_SL_QUERY:
-      // mp1: SLQUERY_HINT - return hint window handle
-      //      SLQUERY_CTXMENU - return context (popup) menu window handle
-      return (MRESULT)WinQueryWindowULong( hwnd,
-                         LONGFROMMP(mp1) == SLQUERY_HINT ? 4 : 8 );
+      {
+        // mp1: SLQUERY_HINT - return hint window handle
+        //      SLQUERY_CTXMENU - return context (popup) menu window handle
+
+        PLISTWINDATA	pstWinData = (PLISTWINDATA)WinQueryWindowPtr( hwnd, 0 );
+
+        return (MRESULT)( LONGFROMMP( mp1 ) == SLQUERY_HINT ?
+                            pstWinData->hwndHint : pstWinData->hwndCtxMenu );
+      }
   }
 
   return WinDefWindowProc( hwnd, msg, mp1, mp2 );
@@ -697,13 +756,8 @@ HWND lstInstall(HWND hwndParent, ULONG ulId)
   HWND		hwnd, hwndFrame;
   ULONG		ulFrameFlags = FCF_HORZSCROLL | FCF_BORDER;
 
-  // WC_SL_LIST window data:
-  //   bytes 0-3 - scroll bar position
-  //   bytes 4-7 - hint window handle
-  //   bytes 8-11 - context menu window handle
-  //   bytes 12-15 - pointer to the array: static items IDs of context menu
   if ( !WinRegisterClass( WinQueryAnchorBlock( hwndParent ), WC_SL_LIST,
-                          ListWndProc, 0/*CS_SYNCPAINT*/, 4 * sizeof(ULONG) + sizeof(PULONG) ) )
+                          ListWndProc, 0, sizeof(PLISTWINDATA) ) )
   {
     debug( "WinRegisterClass() fail" );
     return NULLHANDLE;

@@ -51,7 +51,7 @@ ULONG utilLoadInsertStr(HMODULE hMod,		// module handle
                        ULONG cVal, PSZ *ppszVal,// count and pointers to values
                        ULONG cbBuf, PCHAR pcBuf);// result buffer
 BOOL utilTestFont(PSZ pszFont);
-ULONG utilQueryProgPath(PCHAR pcBuf, ULONG cbBuf);
+ULONG utilQueryProgPath(ULONG cbBuf, PCHAR pcBuf);
 
 // Strings
 

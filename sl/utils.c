@@ -449,7 +449,7 @@ BOOL utilTestFont(PSZ pszFont)
   return fPresent;
 }
 
-ULONG utilQueryProgPath(PCHAR pcBuf, ULONG cbBuf)
+ULONG utilQueryProgPath(ULONG cbBuf, PCHAR pcBuf)
 {
   PTIB		pTIB;
   PPIB		pPIB;

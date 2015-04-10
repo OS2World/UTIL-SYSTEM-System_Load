@@ -1,17 +1,17 @@
 VER_MAJOR    = 1
 VER_MINOR    = 0
-VER_REVISION = 0
+VER_REVISION = 1
 
 AUTOR = Andrey Vasilkin
 COMMENT = System load monitor
 PROG = sl
 
 # Uncomment next line and execute WMAKE clean / WMAKE to create a debug version.
-DEBUGCODE = YES
+#DEBUGCODE = YES
 
 # -------------------
 
-!ifdef RCTK
+!ifeq RCTK 1
 
 # You can use Resource Compiler from IBM OS/2 Developer's Toolkit.
 # WMAKE rctk=1

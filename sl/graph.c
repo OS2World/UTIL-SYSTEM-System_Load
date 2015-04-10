@@ -42,7 +42,6 @@ VOID grDone(PGRAPH pGraph)
 {
   if ( pGraph->pulTimestamps != NULL )
     utilMemFree( pGraph->pulTimestamps );
-//    debugFree( pGraph->pulTimestamps );
 }
 
 BOOL grSetTimeScale(PGRAPH pGraph, ULONG ulValWindow, ULONG ulTimeWindow)
@@ -60,11 +59,17 @@ BOOL grSetTimeScale(PGRAPH pGraph, ULONG ulValWindow, ULONG ulTimeWindow)
   ulValWindow += 3;
 
   pGraph->ulTimeWindow = ulTimeWindow;
+
+  // Round ulValWindow up to the next 1024-boundary for a more efficient use
+  // of memory allocated by utilMemAlloc() below (Because utilMemAlloc() calls
+  // DosAllocMem() which round size up to the next page-size boundary).
+  if ( (ulValWindow & 0x03FFL) != 0 )
+    ulValWindow = ( ulValWindow & ~0x03FFL ) + 0x0400L;
+
   if ( pGraph->ulValWindow == ulValWindow )
     return TRUE;
 
   pulTimestamps = utilMemAlloc( ulValWindow * sizeof(ULONG) );
-//  pulTimestamps = debugMAlloc( ulValWindow * sizeof(ULONG) );
   if ( pulTimestamps == NULL )
   {
     debug( "Not enough memory" );
@@ -707,6 +712,9 @@ VOID grDraw(PGRAPH pGraph, HPS hps, PRECTL prclGraph,
         pt.y = rclGraph.yBottom +
                ( ( (pGrVal->pulValues[ulValIdx] - ulMin) * ulGraphHeight ) / (ulMax - ulMin) );
         GpiLine( hps, &pt );
+
+        if ( pt.x <= rclGraph.xLeft )
+          break;
       }
 
       if ( ulLineWidth == 0 )

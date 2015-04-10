@@ -5,6 +5,7 @@
 #define INCL_DOSPROCESS     /* Process and thread values */
 #define INCL_DOSSEMAPHORES
 #define INCL_DOSMISC
+#define INCL_DOSDATETIME
 #define INCL_WIN
 #define INCL_GPI
 #include <os2.h>
@@ -70,7 +71,10 @@ static ULONG		ulDrivesChFl;	// List change flags.
 static ULONG		ulSortBy;	// Field on which list sorted (FLD_*).
 static BOOL		fSortDesc;	// Direction of sort.
 static HMTX		hmtxScan;	// Scan thread lock.
-static HEV		hevStop;	// Scan thread stop signal.
+static HEV		hevStop;	// Stop signal for scan thread.
+static HEV		hevScan;	// Scan signal for scan thread.
+static HMTX		hmuxScan;	// Mutex sem. for hevStop & hevScan.
+static HTIMER		hTimer;		// Scan interval timer.
 static TID		tidScan;	// Scan thread Id.
 // ulSelDrv - selected drive (0 - A:, 1 - B:, e.t.c.).
 static ULONG		ulSelDrv = ((ULONG)(-1));
@@ -93,7 +97,8 @@ static ULONG		ulLineCY = 10;
 static ULONG		ulIconSize;
 
 HMODULE			hDSModule;	// Module handle.
-BOOL			fShowFloppy;
+BOOL			fScanFloppy;	// Read floppies (A:, B:) in next scan.
+BOOL			fShowFloppy;	// Show floppies in list.
 
 
 // Pointers to helper routines.
@@ -408,11 +413,28 @@ VOID APIENTRY ScanThread(ULONG ulData)
   PDRIVE	pDrive;
   ULONG		cbScanInfo, cbDriveInfo;
   ULONG		ulNewChFl;
+  ULONG		ulSem;
   ULONG		ulScanStamp = 0;
+  BOOL		fRes;
 
-  while( ulScanStamp == 0 ||	// Do not pause before the first scan.
-         DosWaitEventSem( hevStop, SCAN_INTERVAL ) == ERROR_TIMEOUT )
+  while( TRUE )
   {
+    // Wait semaphores.
+
+    ulRC = DosWaitMuxWaitSem( hmuxScan, SEM_INDEFINITE_WAIT, &ulSem );
+    if ( ulRC != NO_ERROR )
+    {
+      debug( "DosWaitMuxWaitSem(), rc = %u", ulRC );
+      break;
+    }
+
+    if ( ulSem == (ULONG)hevStop )
+    {
+      debug( "Signal stop received" );
+      break;
+    }
+    DosResetEventSem( hevScan, &ulSem );
+
     ulScanStamp++; // New iteration of the scan.
 
     ulRC = DosRequestMutexSem( hmtxScan, 2000 );
@@ -422,6 +444,7 @@ VOID APIENTRY ScanThread(ULONG ulData)
       break;
     }
 
+    // Query system existing drives.
     ulRC = DosQueryCurrentDisk( &ulDiskCur, &ulDiskMap );
     if ( ulRC != NO_ERROR )
     {
@@ -431,14 +454,54 @@ VOID APIENTRY ScanThread(ULONG ulData)
 
     ulNewChFl = 0;
 
-    // Scan all present drives letters,
-    for( ulScanDrv = 0; ulScanDrv < 26; ulScanDrv++ )
+    // Scan all present drive letters,
+    for( ulScanDrv = fShowFloppy ? 0 : 2; ulScanDrv < 26; ulScanDrv++ )
     {
       if ( (( ulDiskMap << (31-ulScanDrv) ) >> 31) == 0 )
         continue;
 
+      // Search existing drive in the list.
+      for( lDrvIdx = 0, pDrive = NULL; lDrvIdx < cDrives; lDrvIdx++ )
+      {
+        if ( apDrives[lDrvIdx]->ulDrv == ulScanDrv )
+        {
+          pDrive = apDrives[lDrvIdx];
+          break;
+        }
+      }
+      // pDrive == NULL if it was not listed.
+
+      if (
+           !fScanFloppy
+         &&
+           (
+             (
+               ( pDrive != NULL ) && ( pDrive->stDI.ulType == DI_TYPE_FLOPPY )
+             )
+           ||
+             ( ulScanDrv <= 1 )
+           )
+         )
+      {
+        // Scan floppies requested and it is floppy - sign record with current
+        // scanstamp and skip query to drive.
+        if ( pDrive != NULL && fShowFloppy )
+          pDrive->ulScanStamp = ulScanStamp;
+        continue;
+      }
+
       // Query current drive information.
-      if ( !duDiskInfo( ulScanDrv, TRUE, &stInfo ) )
+
+      DosReleaseMutexSem( hmtxScan );
+      fRes = duDiskInfo( ulScanDrv, TRUE, &stInfo );
+      ulRC = DosRequestMutexSem( hmtxScan, 2000 );
+      if ( ulRC != NO_ERROR )
+      {
+        debug( "DosQueryCurrentDisk(), rc = %u\n", ulRC );
+        break;
+      }
+
+      if ( !fRes )
       {
         debug( "duDiskInfo(%u,,) fail", ulScanDrv );
         continue;
@@ -450,16 +513,6 @@ VOID APIENTRY ScanThread(ULONG ulData)
       // "Real" size of DISKINFO structire. Last field DISKINFO.szFSDName
       // contains only DISKINFO.cbFSDName+1 bytes of data: string and '\0'.
       cbScanInfo = sizeof(DISKINFO) - CCHMAXPATH + stInfo.cbFSDName + 1;
-
-      // Search drive in the list.
-      for( lDrvIdx = 0, pDrive = NULL; lDrvIdx < cDrives; lDrvIdx++ )
-      {
-        if ( apDrives[lDrvIdx]->ulDrv == ulScanDrv )
-        {
-          pDrive = apDrives[lDrvIdx];
-          break;
-        }
-      }
 
       if ( pDrive != NULL )
       {
@@ -502,6 +555,7 @@ VOID APIENTRY ScanThread(ULONG ulData)
       // Create new record for drive ulScanDrv and insert it to the list.
 
       pDrive = debugMAlloc( sizeof(DRIVE) - CCHMAXPATH + stInfo.cbFSDName + 1 );
+      apDrives[lDrvIdx] = pDrive;
       if ( pDrive == NULL )
       {
         debug( "Not enough memory" );
@@ -510,7 +564,6 @@ VOID APIENTRY ScanThread(ULONG ulData)
       pDrive->ulDrv = ulScanDrv;
       pDrive->ulScanStamp = ulScanStamp;
       memcpy( &pDrive->stDI, &stInfo, cbScanInfo );
-      apDrives[lDrvIdx] = pDrive;
 
       if ( cDrives == 1 )
         ulSelDrv = ulScanDrv;
@@ -519,6 +572,8 @@ VOID APIENTRY ScanThread(ULONG ulData)
       ulNewChFl |= CHFL_LIST;
 
     } // for, ulScanDrv
+
+    fScanFloppy = FALSE;
 
     // Search and delete disappeared (untouched by during scanning) drives.
     for( lDrvIdx = cDrives - 1; lDrvIdx >= 0; lDrvIdx-- )
@@ -546,22 +601,7 @@ VOID APIENTRY ScanThread(ULONG ulData)
     if ( ulNewChFl != 0 )
     {
       // List or listed data changed - sort list.
-/*      PDRIVE		apOldDrives[MAX_DRIVES];
-
-      if ( ulNewChFl == CHFL_DATA )
-        memcpy( &apOldDrives, &apDrives, cDrives * sizeof(PDRIVE) );*/
-
       qsort( &apDrives, cDrives, sizeof(PDRIVE), _sortComp );
-
-/*      if ( ( ulNewChFl == CHFL_DATA ) &&
-           ( memcmp( &apOldDrives, &apDrives,
-                     cDrives * sizeof(PDRIVE) ) != 0 ) )
-      {
-        // Order of items changed - set flag "list changed"
-        ulNewChFl = CHFL_LIST;
-      }*/
-
-      // Copy changes flags to global variable.
       ulDrivesChFl |= ulNewChFl;
     }
 
@@ -624,9 +664,11 @@ DSEXPORT VOID APIENTRY dsUninstall()
 DSEXPORT BOOL APIENTRY dsInit()
 {
   ULONG		ulRC;
+  SEMRECORD	aSemRec[2];
 
   cDrives = 0;
   ulDrivesChFl = 0;
+  fScanFloppy = TRUE;
 
   fShowFloppy = (BOOL)piniReadULong( hDSModule, "ShowFloppy",
                                                 (ULONG)DEF_SHOWFLOPPY );
@@ -643,8 +685,31 @@ DSEXPORT BOOL APIENTRY dsInit()
   ulRC = DosCreateEventSem( NULL, &hevStop, 0, FALSE );
   if ( ulRC != NO_ERROR )
   {
-    debug( "DosCreateEventSem(), rc = %u", ulRC );
+    debug( "DosCreateEventSem(,&hevStop,,), rc = %u", ulRC );
     DosCloseMutexSem( hmtxScan );
+    return FALSE;
+  }
+
+  ulRC = DosCreateEventSem( NULL, &hevScan, DC_SEM_SHARED, TRUE );
+  if ( ulRC != NO_ERROR )
+  {
+    debug( "DosCreateEventSem(,&hevScan,,), rc = %u", ulRC );
+    DosCloseMutexSem( hmtxScan );
+    DosCloseEventSem( hevStop );
+    return FALSE;
+  }
+
+  aSemRec[0].hsemCur = (HSEM)hevScan;
+  aSemRec[0].ulUser  = (ULONG)hevScan;
+  aSemRec[1].hsemCur = (HSEM)hevStop;
+  aSemRec[1].ulUser  = (ULONG)hevStop;
+  ulRC = DosCreateMuxWaitSem( NULL, &hmuxScan, 2, &aSemRec, DCMW_WAIT_ANY );
+  if ( ulRC != NO_ERROR )
+  {
+    debug( "DosCreateMuxWaitSem(), rc = %u", ulRC );
+    DosCloseMutexSem( hmtxScan );
+    DosCloseEventSem( hevStop );
+    DosCloseEventSem( hevScan );
     return FALSE;
   }
 
@@ -656,6 +721,8 @@ DSEXPORT BOOL APIENTRY dsInit()
     debug( "DosCreateThread(), rc = %u", ulRC );
     DosCloseMutexSem( hmtxScan );
     DosCloseEventSem( hevStop );
+    DosCloseEventSem( hevScan );
+    DosCloseMuxWaitSem( hmuxScan );
   }
 
   hptrAudioCD = WinLoadPointer( HWND_DESKTOP, hDSModule, IDI_AUDIOCD );
@@ -667,6 +734,12 @@ DSEXPORT BOOL APIENTRY dsInit()
   hptrVDisk = WinLoadPointer( HWND_DESKTOP, hDSModule, IDI_VDISK );
   htprRemote = WinLoadPointer( HWND_DESKTOP, hDSModule, IDI_REMOTE );
 
+  ulRC = DosStartTimer( SCAN_INTERVAL, (HSEM)hevScan, &hTimer );
+  if ( ulRC != NO_ERROR )
+  {
+    debug( "DosStartTimer(), rc = %u", ulRC );
+  }
+
   return TRUE;
 }
 
@@ -675,7 +748,9 @@ DSEXPORT VOID APIENTRY dsDone()
   ULONG		ulIdx;
   ULONG		ulRC;
 
+  DosStopTimer( hTimer );
   ulRC = DosPostEventSem( hevStop );
+
   if ( ulRC != NO_ERROR )
     debug( "DosPostEventSem(), rc = %u", ulRC );
   else
@@ -687,7 +762,9 @@ DSEXPORT VOID APIENTRY dsDone()
 
   DosRequestMutexSem( hmtxScan, SEM_INDEFINITE_WAIT );
   DosCloseMutexSem( hmtxScan );
+  DosCloseMuxWaitSem( hmuxScan );
   DosCloseEventSem( hevStop );
+  DosCloseEventSem( hevScan );
 
   debug( "Destroy drives..." );
   for( ulIdx = 0; ulIdx < cDrives; ulIdx++ )
@@ -778,6 +855,11 @@ DSEXPORT BOOL APIENTRY dsSetSel(ULONG ulIndex)
   {
     fSuccess = TRUE;
     ulSelDrv = apDrives[ulIndex]->ulDrv;
+
+    // Forse scan When floppy drive selected.
+    fScanFloppy = ( apDrives[ulIndex]->stDI.ulType == DI_TYPE_FLOPPY );
+    if ( fScanFloppy )
+      DosPostEventSem( hevScan );
   }
 
   DosReleaseMutexSem( hmtxScan );

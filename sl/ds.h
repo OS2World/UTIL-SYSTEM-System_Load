@@ -65,7 +65,7 @@ typedef PSIZEL (*PHutilGetEmSize)(HMODULE hMod);
 typedef LONG (*PHutilGetColor)(HMODULE hMod, ULONG ulColor);
 typedef ULONG (*PHutilLoadInsertStr)(HMODULE hMod, BOOL fStrMsg, ULONG ulId,
                                    ULONG cVal, PSZ *ppszVal, ULONG cbBuf, PCHAR pcBuf);
-typedef ULONG (*PHutilQueryProgPath)(PCHAR pcBuf, ULONG cbBuf);
+typedef ULONG (*PHutilQueryProgPath)(ULONG cbBuf, PCHAR pcBuf);
 
 // Lock/unlock updates
 

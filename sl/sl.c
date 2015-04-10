@@ -82,7 +82,7 @@ int main(int argc, char **argv)
   }
 
   // Open ini-file
-  ulRC = utilQueryProgPath( &szBuf, sizeof(szBuf) );
+  ulRC = utilQueryProgPath( sizeof(szBuf), &szBuf );
   strcpy( &szBuf[ulRC], INI_FILE );
   debug( "INI-file: %s", &szBuf );
   hIni = PrfOpenProfile( hab, &szBuf );
