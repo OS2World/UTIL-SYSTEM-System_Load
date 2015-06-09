@@ -15,6 +15,7 @@
 #include <string.h>
 
 extern HINI			hIni;	// sl.c
+extern HAB			hab;	// sl.c
 
 static PDATASOURCE		*ppDataSrc = NULL;
 static ULONG			cDataSrc = 0;
@@ -36,8 +37,10 @@ BOOL dshIniReadData(HMODULE hMod, PSZ pszKey, PVOID pBuf, PULONG pcbBuf);
 BOOL dshIniGetSize(HMODULE hMod, PSZ pszKey, PULONG pcbData);
 VOID dshUpdateLock();
 VOID dshUpdateUnlock();
+VOID dshUpdateForce(HMODULE hMod);
 PSIZEL dshGetEmSize(HMODULE hMod);
 LONG dshGetColor(HMODULE hMod, ULONG ulColor);
+VOID dshHelpShow(HMODULE hMod, ULONG ulIndex);
 
 static PFN slQueryHelper(PSZ pszFunc);
 
@@ -64,15 +67,15 @@ static HELPERITEM	aHelperList[] =
 {
   // INI-file
 
-  { "iniWriteLong", (PFN)dshIniWriteLong },			// srclst.c
-  { "iniWriteULong", (PFN)dshIniWriteULong },			// srclst.c
-  { "iniWriteStr", (PFN)dshIniWriteStr },			// srclst.c
-  { "iniWriteData", (PFN)dshIniWriteData },			// srclst.c
-  { "iniReadLong", (PFN)dshIniReadLong },			// srclst.c
-  { "iniReadULong", (PFN)dshIniReadULong },			// srclst.c
-  { "iniReadStr", (PFN)dshIniReadStr },				// srclst.c
-  { "iniReadData", (PFN)dshIniReadData },			// srclst.c
-  { "iniGetSize", (PFN)dshIniGetSize },				// srclst.c
+  { "iniWriteLong", (PFN)dshIniWriteLong },			// srclist.c
+  { "iniWriteULong", (PFN)dshIniWriteULong },			// srclist.c
+  { "iniWriteStr", (PFN)dshIniWriteStr },			// srclist.c
+  { "iniWriteData", (PFN)dshIniWriteData },			// srclist.c
+  { "iniReadLong", (PFN)dshIniReadLong },			// srclist.c
+  { "iniReadULong", (PFN)dshIniReadULong },			// srclist.c
+  { "iniReadStr", (PFN)dshIniReadStr },				// srclist.c
+  { "iniReadData", (PFN)dshIniReadData },			// srclist.c
+  { "iniGetSize", (PFN)dshIniGetSize },				// srclist.c
 
   // Graph
 
@@ -94,18 +97,20 @@ static HELPERITEM	aHelperList[] =
   { "util3DFrame", (PFN)util3DFrame },				// utils.c
   { "utilBox", (PFN)utilBox },					// utils.c
   { "utilWriteResStr", (PFN)utilWriteResStr },			// utils.c
+  { "utilWriteResStrAt", (PFN)utilWriteResStrAt },		// utils.c
   { "utilCharStringRect", (PFN)utilCharStringRect },		// utils.c
   { "utilSetFontFromPS", (PFN)utilSetFontFromPS },		// utils.c
   { "utilMixRGB", (PFN)utilMixRGB },				// utils.c
-  { "utilGetEmSize", (PFN)dshGetEmSize },			// srclst.c
-  { "utilGetColor", (PFN)dshGetColor },				// srclst.c
+  { "utilGetEmSize", (PFN)dshGetEmSize },			// srclist.c
+  { "utilGetColor", (PFN)dshGetColor },				// srclist.c
   { "utilLoadInsertStr", (PFN)utilLoadInsertStr },		// utils.c
   { "utilQueryProgPath", (PFN)utilQueryProgPath },		// utils.c
 
   // Lock/unlock updates
 
-  { "updateLock", (PFN)dshUpdateLock },				// srclst.c
-  { "updateUnlock", (PFN)dshUpdateUnlock },			// srclst.c
+  { "updateLock", (PFN)dshUpdateLock },				// srclist.c
+  { "updateUnlock", (PFN)dshUpdateUnlock },			// srclist.c
+  { "updateForce", (PFN)dshUpdateForce },			// srclist.c
 
   // Strings
 
@@ -114,14 +119,18 @@ static HELPERITEM	aHelperList[] =
   { "strFromBytes", (PFN)strFromBytes },			// utils.c
   { "strLoad", (PFN)strLoad },					// utils.c
   { "strLoad2", (PFN)strLoad2 },				// utils.c
+  { "strFromULL", (PFN)strFromULL },				// utils.c
 
   // Controls
 
   { "ctrlStaticToColorRect", (PFN)ctrlStaticToColorRect },	// ctrl.c
   { "ctrlDlgCenterOwner", (PFN)ctrlDlgCenterOwner },		// ctrl.c
   { "ctrlQueryText", (PFN)ctrlQueryText },			// ctrl.c
-  { "ctrlSubclassNotebook", (PFN)ctrlSubclassNotebook }		// ctrl.c
+  { "ctrlSubclassNotebook", (PFN)ctrlSubclassNotebook },	// ctrl.c
 
+  // Help
+
+  { "helpShow", (PFN)dshHelpShow }				// srclist.c
 };
 
 
@@ -141,7 +150,10 @@ static VOID _initModule(PSZ pszFile, PSZ pszDefaultDSFont)
   CHAR		szBuf[256];
   ULONG		ulRC;
   PDATASOURCE	pDataSrc = debugCAlloc( 1, sizeof(DATASOURCE) );
-  PCHAR		pCh;
+  PCHAR		pCh, pcExt;
+  PSZ		pszModule;
+  HELPINIT	hInit = { 0 };
+  FILESTATUS3L 	sInfo;
 
   if ( pDataSrc == NULL )
   {
@@ -158,14 +170,18 @@ static VOID _initModule(PSZ pszFile, PSZ pszDefaultDSFont)
   }
 
   // Get name without path and extension
-  pCh = strrchr( pszFile, '\\' );
-  if ( pCh != NULL )
-    pszFile = pCh + 1;
-  pCh = strrchr( pszFile, '.' );
-  if ( pCh == NULL )
-    pCh = strchr( pszFile, '\0' );
-  ulRC = min( pCh - pszFile, sizeof(pDataSrc->szModule) - 1 );
-  memcpy( &pDataSrc->szModule, pszFile, ulRC );
+  pcExt = strrchr( pszFile, '\\' );
+  pszModule = pcExt != NULL ? ( pcExt + 1 ) : pszFile;
+  pcExt = strrchr( pszModule, '.' );
+  if ( pcExt == NULL )
+  {
+    debug( "Given name has no extension." );
+    DosFreeModule( pDataSrc->hModule );
+    debugFree( pDataSrc );
+    return;
+  }
+  ulRC = min( pcExt - pszModule, sizeof(pDataSrc->szModule) - 1 );
+  memcpy( &pDataSrc->szModule, pszModule, ulRC );
   pDataSrc->szModule[ulRC] = '\0';
 
   // Required entries
@@ -223,7 +239,8 @@ static VOID _initModule(PSZ pszFile, PSZ pszDefaultDSFont)
                     (PFN *)&pDataSrc->fnEnter );
 
 
-  // Add new data source to the list
+  // Add new data source to the list.
+  // Add data source to list now to be able to call helpers from fnInstall().
 
   if ( cDataSrc == ulMaxDataSrc )
   {
@@ -242,11 +259,10 @@ static VOID _initModule(PSZ pszFile, PSZ pszDefaultDSFont)
     ulMaxDataSrc = ulMax;
   }
 
-  // Installation
-
-  // Add data source to list now to be able to call helpers from fnInstall().
   ppDataSrc[cDataSrc] = pDataSrc;
   cDataSrc++;
+
+  // Installation
 
   pDataSrc->pDSInfo = pDataSrc->fnInstall( pDataSrc->hModule, &stSlInfo );
   if ( ( pDataSrc->pDSInfo == NULL ) ||
@@ -258,6 +274,28 @@ static VOID _initModule(PSZ pszFile, PSZ pszDefaultDSFont)
     debugFree( pDataSrc );
     return;
   }
+
+  // Set module title.
+
+  do
+  {
+    if ( (pDataSrc->pDSInfo->ulFlags & DS_FL_RES_MENU_TITLE) != 0 )
+    {
+      if ( WinLoadString( hab, pDataSrc->hModule,
+                          pDataSrc->pDSInfo->_title.ulResId,
+                          sizeof(pDataSrc->szTitle), &pDataSrc->szTitle ) != 0 )
+        break;
+
+      debug( "Cannot load title string for module %s from resource (id: %u)",
+             &pDataSrc->szModule, pDataSrc->pDSInfo->_title.ulResId );
+      pCh = &pDataSrc->szModule;
+    }
+    else
+      pCh = pDataSrc->pDSInfo->_title.pszStr;
+
+    strlcpy( &pDataSrc->szTitle, pCh, sizeof(pDataSrc->szTitle) );
+  }
+  while( FALSE );
 
   // Initialization
 
@@ -271,8 +309,9 @@ static VOID _initModule(PSZ pszFile, PSZ pszDefaultDSFont)
          pDataSrc->fInitialized ? "" : "not ",
          pDataSrc->hModule, pDataSrc->szModule );
 
-  // Default index for new (not ordered) data source & 0x00010000 != 0
-  // It may be helpful to identify new data sources in future.
+  // Default sort index for new (not ordered) data source is number of loaded
+  // modules & 0x00010000. May be helpful to identify new data sources in
+  // future: ulIndex & 0x00010000 != 0.
   pDataSrc->ulIndex = utilQueryProfileLong( hIni, &pDataSrc->szModule,
                                    INI_DSKEY_INDEX, 0x00010000 + cDataSrc );
 
@@ -290,6 +329,25 @@ static VOID _initModule(PSZ pszFile, PSZ pszDefaultDSFont)
                                INI_DSKEY_ITEMHLFORECOL, DEF_DSITEMHLFORECOL );
   pDataSrc->lItemHlBackCol = utilQueryProfileLong( hIni, &pDataSrc->szModule,
                                INI_DSKEY_ITEMHLBACKCOL, DEF_DSITEMHLBACKCOL );
+
+  // Set help instance for data source (if file <module>.hlp exists).
+
+  strcpy( pcExt, ".hlp" );
+  ulRC = DosQueryPathInfo( pszFile, FIL_STANDARDL, &sInfo, sizeof(FILESTATUS3L) );
+  if ( ulRC == NO_ERROR &&
+       (sInfo.attrFile & (FILE_HIDDEN | FILE_DIRECTORY)) == 0 )
+  {
+    // Using data source's title for help window's title (w/o '~').
+    strRemoveMnemonic( sizeof(szBuf), &szBuf, &pDataSrc->szTitle );
+
+    hInit.cb = sizeof( hInit );
+    hInit.pszHelpWindowTitle = &szBuf;
+    hInit.fShowPanelId = CMIC_HIDE_PANEL_ID;
+    hInit.pszHelpLibraryName = pszFile;
+    pDataSrc->hwndHelp = WinCreateHelpInstance( hab, &hInit );
+    debug( "Help instance for %s%s created", pDataSrc->szModule,
+           pDataSrc->hwndHelp == NULLHANDLE ? " WAS NOT" : "" );
+  }
 }
 
 static int _dsSortComp(const void *p1, const void *p2)
@@ -380,6 +438,9 @@ VOID srclstDone()
       debug( "Finalize %s...", &pDataSrc->szModule );
       pDataSrc->fnDone();
     }
+
+    if ( pDataSrc->hwndHelp != NULLHANDLE )
+      WinDestroyHelpInstance( pDataSrc->hwndHelp );
 
     if ( pDataSrc->pszFont != NULL )
       debugFree( pDataSrc->pszFont );
@@ -656,6 +717,18 @@ VOID dshUpdateUnlock()
   DosReleaseMutexSem( hmtxUpdate );
 }
 
+VOID dshUpdateForce(HMODULE hMod)
+{
+  PDATASOURCE		pDataSrc = _srclstGetByModHdl( hMod );
+
+  if ( pDataSrc == NULL )
+    return;
+
+  DosRequestMutexSem( hmtxUpdate, SEM_INDEFINITE_WAIT );
+  pDataSrc->fForceUpdate = TRUE;
+  DosReleaseMutexSem( hmtxUpdate );
+}
+
 PSIZEL dshGetEmSize(HMODULE hMod)
 {
   PDATASOURCE		pDataSrc = _srclstGetByModHdl( hMod );
@@ -693,4 +766,14 @@ LONG dshGetColor(HMODULE hMod, ULONG ulColor)
   }
 
   return -1;
+}
+
+VOID dshHelpShow(HMODULE hMod, ULONG ulIndex)
+{
+  PDATASOURCE		pDataSrc = _srclstGetByModHdl( hMod );
+
+  if ( pDataSrc != NULL && pDataSrc->hwndHelp != NULLHANDLE )
+    WinSendMsg( pDataSrc->hwndHelp, HM_DISPLAY_HELP,
+                MPFROMLONG( MAKELONG( ulIndex, NULL ) ),
+                MPFROMSHORT( HM_RESOURCEID ) );
 }

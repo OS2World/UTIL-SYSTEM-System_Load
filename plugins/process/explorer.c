@@ -242,7 +242,7 @@ static VOID _pgFilesWMInitDlg(HWND hwnd)
   PFIELDINFO		pFieldInfo;
   CNRINFO		stCnrInf = { 0 };
   PFIELDINFO		pFldInf;
-  FIELDINFOINSERT	stFldInfIns;
+  FIELDINFOINSERT	stFldInfIns = { 0 };
   PFILERECORD		pRecords;
   PFILERECORD		pRecord;
   RECORDINSERT		stRecIns;

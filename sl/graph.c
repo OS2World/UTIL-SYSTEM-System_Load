@@ -3,6 +3,7 @@
 #include <os2.h>
 #include "graph.h"
 #include "utils.h"
+#include "hmem.h"
 #include "debug.h"
 #include <stdlib.h>
 #include <string.h>
@@ -41,7 +42,7 @@ BOOL grInit(PGRAPH pGraph, ULONG ulValWindow, ULONG ulTimeWindow,
 VOID grDone(PGRAPH pGraph)
 {
   if ( pGraph->pulTimestamps != NULL )
-    utilMemFree( pGraph->pulTimestamps );
+    hmFree( pGraph->pulTimestamps );
 }
 
 BOOL grSetTimeScale(PGRAPH pGraph, ULONG ulValWindow, ULONG ulTimeWindow)
@@ -63,13 +64,15 @@ BOOL grSetTimeScale(PGRAPH pGraph, ULONG ulValWindow, ULONG ulTimeWindow)
   // Round ulValWindow up to the next 1024-boundary for a more efficient use
   // of memory allocated by utilMemAlloc() below (Because utilMemAlloc() calls
   // DosAllocMem() which round size up to the next page-size boundary).
+/*
   if ( (ulValWindow & 0x03FFL) != 0 )
     ulValWindow = ( ulValWindow & ~0x03FFL ) + 0x0400L;
+*/
 
   if ( pGraph->ulValWindow == ulValWindow )
     return TRUE;
 
-  pulTimestamps = utilMemAlloc( ulValWindow * sizeof(ULONG) );
+  pulTimestamps = hmMAlloc( ulValWindow * sizeof(ULONG) );
   if ( pulTimestamps == NULL )
   {
     debug( "Not enough memory" );
@@ -91,7 +94,7 @@ BOOL grSetTimeScale(PGRAPH pGraph, ULONG ulValWindow, ULONG ulTimeWindow)
   }
 
   if ( pGraph->pulTimestamps != NULL )
-    utilMemFree( pGraph->pulTimestamps );
+    hmFree( pGraph->pulTimestamps );
   pGraph->pulTimestamps = pulTimestamps;
   pGraph->cTimestamps = cTimestamps;
   pGraph->ulValWindow = ulValWindow;
@@ -143,7 +146,7 @@ VOID grInitVal(PGRAPH pGraph, PGRVAL pGrVal)
 VOID grDoneVal(PGRVAL pGrVal)
 {
   if ( pGrVal->pulValues != NULL )
-    utilMemFree( pGrVal->pulValues );
+    hmFree( pGrVal->pulValues );
 }
 
 VOID grResetVal(PGRAPH pGraph, PGRVAL pGrVal)
@@ -163,7 +166,7 @@ VOID grSetValue(PGRAPH pGraph, PGRVAL pGrVal, ULONG ulValue)
   {
     // Value window size changed - allocate new size memory block and copy
     // (part) data from old.
-    PULONG	pulValues = utilMemAlloc( pGraph->ulValWindow * sizeof(ULONG) );
+    PULONG	pulValues = hmMAlloc( pGraph->ulValWindow * sizeof(ULONG) );
 
     if ( pulValues != NULL )
     {
@@ -191,7 +194,7 @@ VOID grSetValue(PGRAPH pGraph, PGRVAL pGrVal, ULONG ulValue)
       }
 
       if ( pGrVal->pulValues != NULL )
-        utilMemFree( pGrVal->pulValues );
+        hmFree( pGrVal->pulValues );
       pGrVal->pulValues = pulValues;
       pGrVal->cValues = cValues;
       pGrVal->ulValWindow = pGraph->ulValWindow;
@@ -636,101 +639,105 @@ VOID grDraw(PGRAPH pGraph, HPS hps, PRECTL prclGraph,
     ULONG		ulGrValIdx;
     ULONG		ulTSIdx, ulValIdx;
     ULONG		ulLastTS;
-    ULONG		ulGraphHeight;
-    ULONG		ulGraphWidth;
-    ULONG		ulParamValIdx = 0;
-    LONG		lSaveColor, lSaveBackColor;
+    ULONG		ulGraphHeight = rclGraph.yTop - rclGraph.yBottom;
+    ULONG		ulGraphWidth = rclGraph.xRight - rclGraph.xLeft;
+    PGRVALPARAM		pParamVal;
+    LONG		lSaveColor = GpiQueryColor( hps );
+    LONG		lSaveBackColor = GpiQueryBackColor( hps );
+    PPOINTL		paPoints = debugMAlloc( ( pGraph->cTimestamps + 2 ) *
+                                                sizeof(POINTL) );
+    ULONG		cPoints;
+    PPOINTL		pPoint;
 
-    // Region already initialized - set clipping with it.
-    GpiSetClipRegion( hps, hrgn, &hrgnOld );
-
-    ulGraphHeight = rclGraph.yTop - rclGraph.yBottom;
-    ulGraphWidth = rclGraph.xRight - rclGraph.xLeft;
-
-    // Save PS colors
-    lSaveColor = GpiQueryColor( hps );
-    lSaveBackColor = GpiQueryBackColor( hps );
-
-    // For all given data storages...
-    for( ulGrValIdx = 0; ulGrValIdx < cGrVal; ulGrValIdx++ )
+    if ( paPoints == NULL )
+      debug( "Not enough memory" );
+    else
     {
-      pGrVal = ppGrVal[ulGrValIdx];
+      // Region already initialized - set clipping with it.
+      GpiSetClipRegion( hps, hrgn, &hrgnOld );
 
-      // Set display parameters for data storage
-      GpiSetColor( hps, pParam->pParamVal[ulParamValIdx].clrGraph );
-      ulLineWidth = pParam->pParamVal[ulParamValIdx].ulLineWidth;
-      if ( ulLineWidth > 0 )
-        GpiSetLineWidth( hps, ulLineWidth * LINEWIDTH_NORMAL );
-      else
+      // For all given data storages...
+      for( ulGrValIdx = 0; ulGrValIdx < cGrVal; ulGrValIdx++ )
       {
-        GpiBeginPath( hps, 1 );
-        pt.x = rclGraph.xRight;
-        pt.y = rclGraph.yBottom;
-        GpiMove( hps, &pt );
-      }
+        pGrVal = ppGrVal[ulGrValIdx];
 
-      // Next index in the array of graph parameters
-      ulParamValIdx++;
-      ulParamValIdx %= pParam->cParamVal;
+        // Last timestamp index
+        ulTSIdx = pGraph->lLastIndex;
+        // Last timestamp
+        ulLastTS = pGraph->pulTimestamps[ulTSIdx];
+        // Last value index in data storage
+        ulValIdx = pGrVal->lLastIndex;
 
-      // Last timestamp index
-      ulTSIdx = pGraph->lLastIndex;
-      // Last timestamp
-      ulLastTS = pGraph->pulTimestamps[ulTSIdx];
-      // Last value index in data storage
-      ulValIdx = pGrVal->lLastIndex;
+        // Draw graph for data storage
 
-      // Set first (rightmost) position of graph in PS
-      pt.x = rclGraph.xRight;
-      pt.y = rclGraph.yBottom +
-             ( ((pGrVal->pulValues[ulValIdx] - ulMin) * ulGraphHeight) / (ulMax - ulMin) );
-      if ( ulLineWidth > 0 )
-        GpiMove( hps, &pt );
-      else
-        GpiLine( hps, &pt );
+        cPoints = 0;
+        pPoint = paPoints;
+        for( lIdx = 0; lIdx < min(pGraph->cTimestamps, pGrVal->cValues); lIdx++ )
+        {
+          // Draw section
+          pt.x = rclGraph.xRight -
+                 ( (ulLastTS - pGraph->pulTimestamps[ulTSIdx]) * ulGraphWidth / pGraph->ulTimeWindow );
+          pt.y = rclGraph.yBottom +
+                 ( ( (pGrVal->pulValues[ulValIdx] - ulMin) * ulGraphHeight ) / (ulMax - ulMin) );
 
-      // Draw graph for data storage
+          *pPoint = pt;
+          pPoint++;
+          cPoints++;
+          if ( pt.x <= rclGraph.xLeft )
+            break;
 
-      for( lIdx = 0; lIdx < min( pGraph->cTimestamps, pGrVal->cValues ) - 1;
-           lIdx++ )
-      {
-        // Previous timestamp index
-        if ( ulTSIdx == 0 )
-          ulTSIdx = pGraph->ulValWindow - 1;
-        else
-          ulTSIdx--;
+          // Previous timestamp index
+          if ( ulTSIdx == 0 )
+            ulTSIdx = pGraph->ulValWindow - 1;
+          else
+            ulTSIdx--;
 
-        // Previous value index
-        if ( ulValIdx == 0 )
-          ulValIdx = pGrVal->ulValWindow - 1;
-        else
-          ulValIdx--;
+          // Previous value index
+          if ( ulValIdx == 0 )
+            ulValIdx = pGrVal->ulValWindow - 1;
+          else
+            ulValIdx--;
+        }
 
-        // Draw section
-        pt.x = rclGraph.xRight -
-               ( (ulLastTS - pGraph->pulTimestamps[ulTSIdx]) * ulGraphWidth / pGraph->ulTimeWindow );
-        pt.y = rclGraph.yBottom +
-               ( ( (pGrVal->pulValues[ulValIdx] - ulMin) * ulGraphHeight ) / (ulMax - ulMin) );
-        GpiLine( hps, &pt );
+        pParamVal = &pParam->pParamVal[ulGrValIdx % pParam->cParamVal];
+        if ( pParamVal->ulLineWidth > 0 )
+          GpiSetLineWidth( hps, pParamVal->ulLineWidth * LINEWIDTH_NORMAL );
+        GpiMove( hps, paPoints );
 
-        if ( pt.x <= rclGraph.xLeft )
-          break;
-      }
+        if ( pParamVal->ulPlygonBright != 0 )
+        {
+          POLYGON		stPlygon;
 
-      if ( ulLineWidth == 0 )
-      {
-        pt.y = rclGraph.yBottom;
-        GpiLine( hps, &pt );
-        GpiEndPath( hps );
-        GpiFillPath( hps, 1, FPATH_INCL );
-      }
-    }
+          pPoint->x = pt.x;
+          pPoint->y = rclGraph.yBottom;
+          pPoint++;
+          pPoint->x = rclGraph.xRight;
+          pPoint->y = rclGraph.yBottom;
+          pPoint++;
 
-    // Restore PS colors.
-    GpiSetColor( hps, lSaveColor );
-    GpiSetBackColor( hps, lSaveBackColor );
-    // Restore clipping.
-    GpiSetClipRegion( hps, NULLHANDLE, &hrgnOld );
+          stPlygon.ulPoints = cPoints + 2;
+          stPlygon.aPointl = paPoints;
+
+          GpiSetColor( hps, utilMixRGB( pParam->clrBackground,
+                              pParamVal->clrGraph, pParamVal->ulPlygonBright ) );
+          GpiPolygons( hps, 1, &stPlygon, POLYGON_NOBOUNDARY, POLYGON_INCL );
+        }
+
+        // Set display parameters for data storage
+        GpiSetColor( hps, pParamVal->clrGraph );
+        GpiPolyLine( hps, cPoints - 1, &paPoints[1] );
+
+      } // for( ulGrValIdx ...
+
+      GpiSetLineWidth( hps, LINEWIDTH_DEFAULT );
+      // Restore PS colors.
+      GpiSetColor( hps, lSaveColor );
+      GpiSetBackColor( hps, lSaveBackColor );
+      // Restore clipping.
+      GpiSetClipRegion( hps, NULLHANDLE, &hrgnOld );
+
+      debugFree( paPoints );
+    } // if ( paPoints == NULL ) else
   }
 
   GpiDestroyRegion( hps, hrgn );

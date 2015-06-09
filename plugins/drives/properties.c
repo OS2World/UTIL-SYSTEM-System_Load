@@ -7,7 +7,6 @@
 
 extern HMODULE		hDSModule;	// Module handle, drives.c
 extern BOOL		fShowFloppy;	// drive.c
-extern BOOL		fScanFloppy;	// drive.c
 extern PHiniWriteULong	piniWriteULong;	// Helper routine, drive.c
 
 static BOOL		fOldShowFloppy;
@@ -66,8 +65,6 @@ static MRESULT EXPENTRY DialogProc(HWND hwnd, ULONG msg, MPARAM mp1, MPARAM mp2)
           {
             fShowFloppy = WinQueryButtonCheckstate( hwnd,
                                                     SHORT1FROMMP( mp1 ) ) != 0;
-            if ( fShowFloppy )
-              fScanFloppy = TRUE;
           }
           break;
 

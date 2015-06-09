@@ -9,14 +9,14 @@ set rctk=1
 if .%2. == .rctk. goto rctk
 set rctk=0
 :rctk
-set make_sw=-h
+set make_sw=-h -s
 set actInf=Make:
 if exist bin goto start
 md bin
 goto start
 
 :clean
-set make_sw=-h clean
+set make_sw=-h -s clean
 set actInf=Clean:
 
 :start
@@ -25,9 +25,9 @@ if .%WATCOM%. == .. goto needow
 rem	Make binaries
 rem	=============
 
-set plugins=cpu drives net os4irq process
+set plugins=cpu drives net os4irq process traffic
 rem set plugins=%plugins% sample1 sample2 sample3
-set utils=cpuid getver rxgetver sysstate
+set utils=cpuid getver rxgetver sysstate cputemp
 
 echo %actInf% main program.
 

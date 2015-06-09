@@ -15,7 +15,6 @@ static VOID _wmInit(HWND hwnd)
   HWND			hwndControl;
   ULONG			ulIdx;
   CHAR			szBuf[128];
-  PCHAR			pcChar;
   PDATASOURCE		pDataSrc;
   SHORT			sIndex;
   ULONG			ulSelDSIdx = ((ULONG)(-1));
@@ -24,13 +23,9 @@ static VOID _wmInit(HWND hwnd)
   for( ulIdx = 0; ulIdx < srclstGetCount(); ulIdx++ )
   {
     pDataSrc = srclstGetByIndex( ulIdx );
-    strlcpy( &szBuf, pDataSrc->pDSInfo->pszMenuTitle, sizeof(szBuf) );
 
-    // Remove tilde character from data source's title
-    pcChar = strchr( &szBuf, '~' );
-    if ( pcChar != NULL )
-      strcpy( pcChar, &pcChar[1] );
-
+    // Get data source title without '~'.
+    strRemoveMnemonic( sizeof(szBuf), &szBuf, &pDataSrc->szTitle );
     // Add data source title and pointer to data source to the list
     sIndex = WinInsertLboxItem( hwndControl, LIT_END, &szBuf );
     if ( sIndex != LIT_MEMERROR || sIndex != LIT_ERROR )

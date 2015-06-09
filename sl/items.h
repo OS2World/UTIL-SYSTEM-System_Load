@@ -17,3 +17,4 @@ VOID itemsCommand(HWND hwndOwner, USHORT usCommand);
 // itemsSortBy(ulNewSort), ulNewSort - sort type or DSSORT_QUERY
 ULONG itemsSortBy(ULONG ulNewSort);
 VOID itemsEnter(HWND hwnd);
+BOOL itemsHelp(BOOL fShow);

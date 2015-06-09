@@ -6,6 +6,7 @@
 #include "sl.h"
 #include "srclist.h"
 #include "utils.h"
+#include "hmem.h"
 #include "debug.h"
 //#include "ft2lib.h"
 #include <string.h>
@@ -64,6 +65,12 @@ int main(int argc, char **argv)
 
   debugInit();
 
+  if ( hmInit() != 0 )
+  {
+    debug( "High memory allocator initialization failed" );
+    return 1;
+  }
+
   // Initialize PM
   hab = WinInitialize( 0 );
   if ( !hab )
@@ -89,7 +96,7 @@ int main(int argc, char **argv)
   if ( hIni == NULLHANDLE )
   {
     WinMessageBox( HWND_DESKTOP, HWND_DESKTOP,
-                   "Cannot read/write configuration.", "Error", 1,
+                   "Cannot read/write configuration.", NULL, 1,
                    MB_ERROR | MB_MOVEABLE | MB_CANCEL );
     WinDestroyMsgQueue( hmq );
     WinTerminate( hab );
@@ -126,6 +133,7 @@ int main(int argc, char **argv)
   // It's ok if _ft2libOn() was not called.
   _ft2libOff();
 
+  hmDone();
   debugDone();
 
   return 0;

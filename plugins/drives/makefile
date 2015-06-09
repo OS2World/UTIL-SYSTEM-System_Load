@@ -5,7 +5,7 @@ PLUGIN = drives
 AUTOR = Andrey Vasilkin
 
 # VERSION - optional
-VERSION = 1.0.1
+VERSION = 1.0.3
 
 # COMMENT - optional
 COMMENT = SystemLoad plugin. Drives monitor.

@@ -1,3 +1,5 @@
+#include "termzone.h"
+
 // System API
 
 #define PROCESSOR_OFFLINE               0
@@ -31,7 +33,6 @@ typedef struct _CPU {
   ULLONG		ullIntr;	// Last update interrupts counter value.
   ULONG			ulLoadIntr;	// Last update interrupt load (0..999).
   GRVAL			stGrVal;	// Graph values storage (busy+intr.).
-  BOOL			fStatus;	// Processor status available.
   BOOL			fOnline;	// Processor status.
 } CPU, *PCPU;
 
@@ -70,17 +71,20 @@ typedef struct _CPU {
 #define ID_ICON_CPUOFF		101
 
 // Strings
-#define IDS_CPU			16
-#define IDS_LOAD		17
-#define IDS_USER		18
-#define IDS_IRQ			19
-#define IDS_FEATURES		20
-#define IDS_ONLINE		21
-#define IDS_OFFLINE		22
-#define IDS_PATHNAME_FIRST_ID	23 // must be higest
+#define IDS_DS_TITLE		1
+#define IDS_CPU			2
+#define IDS_USER		3
+#define IDS_IRQ			4
+#define IDS_TEMP		5
+#define IDS_FEATURES		6
+#define IDS_ONLINE		7
+#define IDS_OFFLINE		8
+#define IDS_PATHNAME_FIRST_ID	9 // must be higest value
 
 // Properties dialog
 #define IDD_DSPROPERTIES1	1000
+#define IDD_ST_NEED_DRIVER	1048
+#define IDD_PB_INSTALL_DRIVER	1049
 #define IDD_GB_TEMPERATURE	1050
 #define IDD_ST_PATHNAME		1051
 #define IDD_CB_PATHNAME		1052
@@ -119,12 +123,12 @@ typedef struct _CPU {
 
 
 // Messages
-#define IDMSG_PT_OK			1
-#define IDMSG_PT_BAD_PATHNAME		2
-#define IDMSG_PT_NOT_FOUND		3
-#define IDMSG_PT_INVALID_TYPE		4
-#define IDMSG_PT_ACPI_INCOMP_VER	5
-#define IDMSG_PT_INVALID_VALUE		6
+#define IDMSG_TZ_OK			1
+#define IDMSG_TZ_BAD_PATHNAME		2
+#define IDMSG_TZ_NOT_FOUND		3
+#define IDMSG_TZ_INVALID_TYPE		4
+#define IDMSG_TZ_ACPI_INCOMP_VER	5
+#define IDMSG_TZ_INVALID_VALUE		6
 
 #define IDMSG_PF_CPUSTRING		7
 #define IDMSG_PF_STEPPINGID		8
@@ -212,3 +216,7 @@ typedef struct _CPU {
 #define IDMSG_PF_CACHELINESIZE		89
 #define IDMSG_PF_L2ASSOCIATIVITY	90
 #define IDMSG_PF_CACHESIZE		91
+
+#define IDMSG_COPY_FAIL			92
+#define IDMSG_INSTALL_FAIL		93
+#define IDMSG_INSTALL_OK		94

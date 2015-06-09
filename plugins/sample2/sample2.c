@@ -29,7 +29,8 @@ static DSINFO stDSInfo =
   NULL,				// "Sort-by" strings.
   0,				// Flags DS_FL_*
   100,				// Items horisontal space, %Em
-  100				// Items vertical space, %Em
+  100,				// Items vertical space, %Em
+  0				// Help main panel index.
 };
 
 static PSZ	apszItems[] =

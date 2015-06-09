@@ -1,5 +1,6 @@
 #define INCL_ERRORS
 #define INCL_WIN
+#define INCL_DOSSPINLOCK
 #include <os2.h>
 #include <ds.h>
 #include <sl.h>
@@ -7,7 +8,6 @@
 
 extern PCPU		pCPUList;	// CPU objects, cpu.c
 extern HMODULE		hDSModule;	// Module handle, cpu.c
-extern PDOSSETPROCESSORSTATUS	pDosSetProcessorStatus;
 
 static ULONG		ulCtxMenuItem;
 
@@ -21,22 +21,23 @@ DSEXPORT VOID APIENTRY dsFillMenu(HWND hwndMenu, ULONG ulIndex)
   MENUITEM		stMINew = { 0 };
   CHAR			szBuf[64];
 
-  // Separator
-  stMINew.iPosition = MIT_END;
-  stMINew.afStyle = MIS_SEPARATOR;
-  WinSendMsg( hwndMenu, MM_INSERTITEM, MPFROMP( &stMINew ), 0 );
-
   // Item "Features"
   pstrLoad( hDSModule, IDS_FEATURES, sizeof(szBuf), &szBuf );
   stMINew.afStyle = MIS_TEXT;
+  stMINew.iPosition = MIT_END;
   stMINew.id = IDM_DSCMD_FIRST_ID;
   WinSendMsg( hwndMenu, MM_INSERTITEM, MPFROMP( &stMINew ), MPFROMP( &szBuf ) );
 
-  if ( ulIndex == DS_SEL_NONE || ulIndex == 0 || !pCPUList[ulIndex].fStatus )
+  if ( ulIndex == DS_SEL_NONE || ulIndex == 0 )
     return;
+
+  // Separator
+  stMINew.afStyle = MIS_SEPARATOR;
+  WinSendMsg( hwndMenu, MM_INSERTITEM, MPFROMP( &stMINew ), 0 );
 
   // Item "Online"
   pstrLoad( hDSModule, IDS_ONLINE, sizeof(szBuf), &szBuf );
+  stMINew.afStyle = MIS_TEXT;
   stMINew.id = IDM_DSCMD_FIRST_ID + 1;
   WinSendMsg( hwndMenu, MM_INSERTITEM, MPFROMP( &stMINew ), MPFROMP( &szBuf ) );
   WinSendMsg( hwndMenu, MM_SETITEMATTR, MPFROM2SHORT( stMINew.id, TRUE ),
@@ -69,8 +70,7 @@ DSEXPORT ULONG APIENTRY dsCommand(HWND hwndOwner, USHORT usCommand)
                              PROCESSOR_ONLINE : PROCESSOR_OFFLINE;
 
   if ( ( (ulStatus == PROCESSOR_ONLINE) == pCPUList[ulCtxMenuItem].fOnline ) ||
-       ( pDosSetProcessorStatus == NULL ) ||
-       ( pDosSetProcessorStatus( ulCtxMenuItem + 1, ulStatus ) != NO_ERROR ) )
+       ( DosSetProcessorStatus( ulCtxMenuItem + 1, ulStatus ) != NO_ERROR ) )
     return DS_UPD_NONE;
 
   pCPUList[ulCtxMenuItem].fOnline = usCommand == (IDM_DSCMD_FIRST_ID + 1);

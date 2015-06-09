@@ -43,14 +43,16 @@ static DSINFO stDSInfo = {
   &apszFields,		// "Sort-by" strings.
   0,			// Flags DS_FL_*
   70,			// Items horisontal space, %Em
-  50			// Items vertical space, %Em
+  50,			// Items vertical space, %Em
+  0			// Help main panel index.
 };
 
 
 static GRVALPARAM	stGrValParam =
 {
   DEF_LINECOLOR,	// clrGraph
-  2			// lLineWidth
+  2,			// lLineWidth
+  0			// ulPlygonBright
 };
 
 GRPARAM			stGrParam =

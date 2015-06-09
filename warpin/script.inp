@@ -13,7 +13,7 @@
     <PCK INDEX=2
          PACKAGEID="Digi\SystemLoad\System Load module - CPU\<!-- BL:..\bin\cpu.dll -->"
          TARGET="$(1)"
-         TITLE="CPU"
+         TITLE="Module: CPU"
          REQUIRES=1
          SELECT | FIXED
          >CPU</PCK>
@@ -21,7 +21,7 @@
     <PCK INDEX=3
          PACKAGEID="Digi\SystemLoad\System Load module - Drives\<!-- BL:..\bin\drives.dll -->"
          TARGET="$(1)"
-         TITLE="Drives"
+         TITLE="Module: Drives"
          REQUIRES=1
          SELECT | FIXED
          >Drives</PCK>
@@ -29,7 +29,7 @@
     <PCK INDEX=4
          PACKAGEID="Digi\SystemLoad\System Load module - Network\<!-- BL:..\bin\net.dll -->"
          TARGET="$(1)"
-         TITLE="Network Adapters"
+         TITLE="Module: Network Adapters"
          REQUIRES=1
          SELECT | FIXED
          >Network Adapters</PCK>
@@ -37,7 +37,7 @@
     <PCK INDEX=5
          PACKAGEID="Digi\SystemLoad\System Load module - IRQ\<!-- BL:..\bin\os4irq.dll -->"
          TARGET="$(1)"
-         TITLE="IRQ (OS/4 kernel required)"
+         TITLE="Module: IRQ (OS/4 kernel required)"
          REQUIRES=1
          SELECT | FIXED
          >IRQ</PCK>
@@ -45,13 +45,21 @@
     <PCK INDEX=6
          PACKAGEID="Digi\SystemLoad\System Load module - Processes\<!-- BL:..\bin\process.dll -->"
          TARGET="$(1)"
-         TITLE="Processes"
+         TITLE="Module: Processes"
          REQUIRES=1
          SELECT | FIXED
          >IRQ</PCK>
 
     <PCK INDEX=7
-         PACKAGEID="Digi\SystemLoad\System Load utilites\1\0\0"
+         PACKAGEID="Digi\SystemLoad\System Load module - Traffic\<!-- BL:..\bin\traffic.dll -->"
+         TARGET="$(1)"
+         TITLE="Module: Traffic"
+         REQUIRES=1
+         SELECT | FIXED
+         >IRQ</PCK>
+
+    <PCK INDEX=8
+         PACKAGEID="Digi\SystemLoad\System Load utilites\1\1\0"
          TARGET="$(1)"
          TITLE="System Load utilites"
          SELECT | FIXED
@@ -60,7 +68,16 @@
   </HEAD>
   <BODY>
 
-    <PAGE INDEX=1 TYPE=CONTAINER>
+    <PAGE INDEX=1 TYPE=README>
+      <NEXTBUTTON TARGET=2>~Next</NEXTBUTTON>
+      <README EXTRACTFROMPCK="1">License.txt</README>
+      <TEXT>
+        Please read this license.
+        Select "Next" to continue or "Cancel" to abort installation.
+      </TEXT>
+    </PAGE>
+
+    <PAGE INDEX=2 TYPE=CONTAINER>
       <NEXTBUTTON TARGET=0>I~nstall</NEXTBUTTON>
       <TEXT>
         Installing System Load monitor

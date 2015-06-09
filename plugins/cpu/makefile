@@ -5,23 +5,26 @@ PLUGIN = cpu
 AUTOR = Andrey Vasilkin
 
 # VERSION - optional
-VERSION = 1.0.0
+VERSION = 1.1.0
 
 # COMMENT - optional
 COMMENT = SystemLoad plugin. CPU monitor.
 
 # LIBPATH - optional
-#LIBPATH = D:\my\lib\path
+#LIBPATH = .\
 
 # LIBS - optional
-# No need lib. - acpi32.dll loads is dynamically.
-#LIBS = acpi32.lib
+LIBS = cputemp.lib
 
 # SRCS - required
-SRCS = cpu.c properties.c ctxmenu.c proctemp.c features.c
+SRCS = cpu.c properties.c ctxmenu.c termzone.c features.c
 
 # RCFILE - optional
 RCFILE = cpu.rc
+
+# IPF - optional
+# Source of help file. Will be compiled to <PLUGIN>.hlp
+IPF = cpu.ipf
 
 # INCPATH - optional
 # Header files from ACPI Toolkit.

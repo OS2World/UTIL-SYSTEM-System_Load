@@ -1,8 +1,3 @@
-// Presentation
-// ------------
-
-#define ITEM_VPAD		10
-#define ITEM_HPAD		5
 
 // INI-file
 // --------
@@ -67,21 +62,27 @@
 #define  SLQUERY_CTXMENU	1
 // WM_SL_CONTEXTMENU - Message for list window.
 //   (POINTS)mp1 - mouse pointer coordinates,
-//   (LONG)mp2 - data source item for which will be built menu or -1.
+//   (LONG)mp2 - data source item for which will be built menu or -1 for white
+//               space.
 #define WM_SL_CONTEXTMENU	( WM_USER + 204 )
 // SB_SL_SLIDEROFFSET - New command for WM_HSCROLL.
 #define SB_SL_SLIDEROFFSET	10555
 
 // Details window messages
 
-// WM_SL_DETAILSSIZE - From details window to parent window.
+// WM_SL_DETAILSSIZE - From details client window to main window.
 // Informs that the details window's height was changed.
 #define WM_SL_DETAILSSIZE	( WM_USER + 204 )
+// WM_SL_DETAILSACTIVATE - From details window to parent window.
+// Informs that the details window activated.
+#define WM_SL_DETAILSACTIVATE	( WM_USER + 205 )
+
 
 // Properties dialog messages
 
 #define WM_SL_UNDO		( WM_USER + 305 )
 #define WM_SL_DEFAULT		( WM_USER + 306 )
+#define WM_SL_HELP		( WM_USER + 307 )
 
 
 // Resources
@@ -93,6 +94,7 @@
 
 // Menu items
 #define IDM_DATASRC			5000
+#define IDM_HELP			5001
 // IDM_DATASRC_FIRST_ID - menu item id for first data source
 #define  IDM_DATASRC_FIRST_ID		5100
 #define  IDM_DATASRC_LAST_ID		5199
@@ -131,6 +133,7 @@
 #define IDD_NOTEBOOK			101
 #define IDD_PB_UNDO			102
 #define IDD_PB_DEFAULT			103
+#define IDD_PB_HELP			104
 
 // Settings dialog
 

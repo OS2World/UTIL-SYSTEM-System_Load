@@ -49,7 +49,8 @@ static DSINFO stDSInfo = {
   DS_FL_SELITEM_BG_LIST |
   DS_FL_NO_BG_UPDATES,
   80,					// Items horisontal space, %Em
-  50					// Items vertical space, %Em
+  50,					// Items vertical space, %Em
+  0					// Help main panel index.
 };
 
 static ULONG		aulFldStrId[FIELDS] = {
@@ -760,8 +761,8 @@ DSEXPORT VOID APIENTRY dsSetWnd(ULONG ulIndex, HWND hwnd, HPS hps)
 
 DSEXPORT VOID APIENTRY dsPaintItem(ULONG ulIndex, HPS hps, PSIZEL psizeWnd)
 {
-  POINTL	pt;
   PPROCITEM  	pstItem = stList.ppItems[ulIndex];
+  POINTL	pt;
   RECTL		rect;
   BOOL		fTypeSortItem = ( ulSortFld == FLD_TYPE ) &&
                                 ( pstItem->pPRec != NULL );
@@ -809,8 +810,7 @@ DSEXPORT VOID APIENTRY dsPaintItem(ULONG ulIndex, HPS hps, PSIZEL psizeWnd)
   else
     GpiSetColor( hps, putilMixRGB( lColor, lBackColor, 65 ) );
 
-  if ( pstItem->pszName != NULL )
-    GpiCharStringAt( hps, &pt, pstItem->cbName, pstItem->pszName );
+  GpiCharStringAt( hps, &pt, pstItem->cbName, pstItem->pszName );
 }
 
 DSEXPORT VOID APIENTRY dsPaintDetails(HPS hps, PSIZEL psizeWnd)

@@ -128,8 +128,9 @@
 #define GRPF_LEFT_TOP_CAPTION	8
 
 typedef struct _GRVALPARAM {
-  LONG		clrGraph;
-  ULONG		ulLineWidth; // 0 - Fill graph, Other - line graph
+  LONG		clrGraph;	// Line color.
+  ULONG		ulLineWidth;	// Line width.
+  ULONG		ulPlygonBright; // 0 - no plygon, 255 - plygon color = clrGraph.
 } GRVALPARAM, *PGRVALPARAM;
 
 typedef struct _GRPARAM {

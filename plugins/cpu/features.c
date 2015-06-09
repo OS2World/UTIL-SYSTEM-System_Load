@@ -113,9 +113,9 @@ static VOID _dlgResized(HWND hwnd)
     if ( WinQueryClassName( hwndNext, sizeof( szClass ), szClass ) == 0 )
       continue;
 
-    if ( strcmp( szClass, "#10" ) == 0 )
+    if ( strcmp( &szClass, "#10" ) == 0 )
       hwndMLE = hwndNext;
-    else if ( ( strcmp( szClass, "#3" ) == 0 ) &&
+    else if ( ( strcmp( &szClass, "#3" ) == 0 ) &&
               ( cButtons < sizeof( aButtons ) / sizeof( struct BUTTON ) ) &&
               ( WinQueryWindowPos( hwndNext, &aButtons[cButtons].swp ) ) &&
               ( !( aButtons[cButtons].swp.fl & SWP_HIDE ) ) )

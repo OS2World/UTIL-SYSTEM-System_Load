@@ -24,8 +24,10 @@ typedef ULLONG			*PULLONG;
 BOOL utilGetTextSize(HPS hps, ULONG cbText, PSZ pszText, PSIZEL pSize);
 VOID util3DFrame(HPS hps, PRECTL pRect, LONG lLTColor, LONG lRBColor);
 VOID utilBox(HPS hps, PRECTL pRect, LONG lColor);
-BOOL utilWriteResStr(HPS hps, PPOINTL pptPos, HMODULE hMod, ULONG ulId,
+BOOL utilWriteResStr(HPS hps, HMODULE hMod, ULONG ulId,
                      ULONG cVal, PSZ *ppszVal);
+BOOL utilWriteResStrAt(HPS hps, PPOINTL pptPos, HMODULE hMod, ULONG ulId,
+                       ULONG cVal, PSZ *ppszVal);
 VOID utilCharStringRect(HPS hps, PRECTL pRect, ULONG cbBuf, PCHAR pcBuf,
                         ULONG ulFlags);
 BOOL utilSetFontFromPS(HPS hpsDst, HPS hpsSrc, LONG llcid);
@@ -60,10 +62,7 @@ LONG strFromBits(ULONG ulVal, ULONG cbBuf, PCHAR pcBuf, BOOL fSlashSec);
 LONG strFromBytes(ULLONG ullVal, ULONG cbBuf, PCHAR pcBuf, BOOL fSlashSec);
 ULONG strLoad(HMODULE hModule, ULONG ulStrId, ULONG cbBuf, PCHAR pcBuf);
 ULONG strLoad2(HMODULE hModule, ULONG ulStrId, PULONG pcbBuf, PCHAR *ppcBuf);
-
-// Memory
-
-PVOID utilMemAlloc(ULONG ulSize);
-VOID utilMemFree(PVOID pMem);
+ULONG strFromULL(PCHAR pcBuf, ULONG cbBuf, ULLONG ullVal);
+VOID strRemoveMnemonic(ULONG cbBuf, PCHAR pcBuf, PSZ pszText);
 
 #endif // UTILS_H

@@ -1,6 +1,6 @@
 VER_MAJOR    = 1
 VER_MINOR    = 0
-VER_REVISION = 1
+VER_REVISION = 2
 
 AUTOR = Andrey Vasilkin
 COMMENT = System load monitor
@@ -16,7 +16,7 @@ PROG = sl
 # You can use Resource Compiler from IBM OS/2 Developer's Toolkit.
 # WMAKE rctk=1
 RCC = rc -r -n -x2
-RCL = rc -n >nul
+RCL = rc -n
 
 !else
 
@@ -29,7 +29,7 @@ RCL = wrc -q
 
 
 SRCS = sl.c mainwin.c list.c details.c hint.c items.c srclist.c graph.c &
-       utils.c ctrl.c settings.c properties.c
+       utils.c ctrl.c settings.c properties.c hmem.c
 
 #LIBS =
 #LIBPATH =
@@ -54,7 +54,7 @@ OBJS = $(SRCS:.c=.obj)
 $(BINPATH)\$(BINFILE): infCompiling $(OBJS) $(RESFILE) $(LNKFILE)
   @echo *  Linking: $@
   wlink @sl.lnk
-  $(RCL) sl.res $@
+  $(RCL) $(RESFILE) $@
   @echo.
 
 $(LNKFILE): .ALWAYS

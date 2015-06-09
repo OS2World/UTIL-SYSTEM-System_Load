@@ -35,8 +35,7 @@ getver.lnk: .ALWAYS
 .c.obj:
   wcc386 $(CFLAGS) $<
 
-.SILENT
 clean: .SYMBOLIC
-  if exist *.obj del *.obj
-  if exist getver.lnk del getver.lnk
-#  if exist $(BINPATH)\$(BINFILE) del $(BINPATH)\$(BINFILE)
+  @if exist *.obj @del *.obj
+  @if exist getver.lnk @del getver.lnk
+

@@ -41,6 +41,16 @@ MRESULT EXPENTRY DetailsFrameWndProc(HWND hwnd, ULONG msg, MPARAM mp1,
         pswp->cx = swpParent.cx + 2 * ulCXSizeBorder;
       }
       return (MRESULT)FALSE;
+
+    case WM_ACTIVATE:
+      // We notify the main window that details window activated.
+      // Main window on this message must activate a list window. Ie detailt
+      // must be never activated.
+      if ( SHORT1FROMMP(mp1) != 0 )
+        WinPostMsg( WinQueryWindow( WinQueryWindow( hwnd, QW_PARENT ),
+                    QW_PARENT ),
+                    WM_SL_DETAILSACTIVATE, 0, 0 );
+      return (MRESULT)FALSE;
   }
 
   return fnDetailsFrameOrgProc( hwnd, msg, mp1, mp2 );

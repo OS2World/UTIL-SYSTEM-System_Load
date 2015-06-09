@@ -326,22 +326,18 @@ static MRESULT _wmSLSetDataSrc(HWND hwnd, MPARAM mp1, MPARAM mp2)
   hwndMenu = WinWindowFromID( hwndFrame, FID_MENU );
 
   // Set window title (static part + ": " + menu item title)
-  // Load static part
+  // Load static part.
   ulIdx = WinLoadString( WinQueryAnchorBlock( hwnd ), 0, IDS_TITLE,
                          sizeof(szBuf) - 3, &szBuf );
   szBuf[ulIdx++] = ':';
   szBuf[ulIdx++] = ' ';
-  // Get menu item title from data source
-  strlcpy( &szBuf[ulIdx], pDataSrc->pDSInfo->pszMenuTitle,
-           sizeof(szBuf) - 1 - ulIdx );
-  // Remove tilde character
-  pcChar = strchr( &szBuf[ulIdx], '~' );
-  if ( pcChar != NULL )
-    strcpy( pcChar, &pcChar[1] );
-  // Set new window title
+  // Get data source title without '~'.
+  strRemoveMnemonic( sizeof(szBuf) - 1 - ulIdx, &szBuf[ulIdx],
+                     &pDataSrc->szTitle );
+  // Set new window title.
   WinSetWindowText( hwndFrame, &szBuf );
 
-  // Uncheck old data source's menu item
+  // Uncheck old data source's menu item.
   if ( pOldDataSrc != NULL )
   {
     WinSendMsg( hwndMenu, MM_SETITEMATTR,
@@ -353,7 +349,7 @@ static MRESULT _wmSLSetDataSrc(HWND hwnd, MPARAM mp1, MPARAM mp2)
       MPFROM2SHORT( MIA_CHECKED, FALSE ) );
   }
 
-  // Check new data source's menu item
+  // Check new data source's menu item.
   WinSendMsg( hwndMenu, MM_SETITEMATTR,
     MPFROM2SHORT( pDataSrc->ulMenuItemId, TRUE ),
     MPFROM2SHORT( MIA_CHECKED, MIA_CHECKED ) );
@@ -362,14 +358,20 @@ static MRESULT _wmSLSetDataSrc(HWND hwnd, MPARAM mp1, MPARAM mp2)
     MPFROM2SHORT( pDataSrc->ulMenuItemId, TRUE ),
     MPFROM2SHORT( MIA_CHECKED, MIA_CHECKED ) );
 
-  // Query menu item "Sort" (submenu)
+  // Enable/disable menu item "Help".
+  WinSendMsg( hwndCtxMenu, MM_SETITEMATTR,
+              MPFROM2SHORT( IDM_HELP, TRUE ),
+              MPFROM2SHORT( MIA_DISABLED,
+                itemsHelp( FALSE ) ? 0 : MIA_DISABLED ) );
+
+  // Query menu item "Sort" (submenu).
   WinSendMsg( hwndMenu, MM_QUERYITEM, MPFROM2SHORT( IDM_VIEW_SORT, TRUE ),
               MPFROMP( &stMISort ) );
   WinSendMsg( hwndCtxMenu, MM_QUERYITEM, MPFROM2SHORT( IDM_VIEW_SORT, TRUE ),
               MPFROMP( &stMICtxSort ) );
 
   // Delete old items form submenu "Sort" (left last 2 items:
-  // "Ascending" and "Descending")
+  // "Ascending" and "Descending").
   for( ulIdx = IDM_SORT_FIRST_ID;
        (SHORT)WinSendMsg( stMISort.hwndSubMenu, MM_DELETEITEM,
                           MPFROM2SHORT( ulIdx, FALSE ), 0 ) > 2;
@@ -393,7 +395,7 @@ static MRESULT _wmSLSetDataSrc(HWND hwnd, MPARAM mp1, MPARAM mp2)
   }
   else
   {
-    // Enable item (submenu) "Sort"
+    // Enable item (submenu) "Sort".
     WinSendMsg( hwndMenu, MM_SETITEMATTR,
                 MPFROM2SHORT( IDM_VIEW_SORT, TRUE ),
                 MPFROM2SHORT( MIA_DISABLED, 0 ) );
@@ -401,10 +403,10 @@ static MRESULT _wmSLSetDataSrc(HWND hwnd, MPARAM mp1, MPARAM mp2)
                 MPFROM2SHORT( IDM_VIEW_SORT, TRUE ),
                 MPFROM2SHORT( MIA_DISABLED, 0 ) );
 
-    // Query current sort type from data source
+    // Query current sort type from data source.
     ulSort = pDataSrc->fnSortBy( DSSORT_QUERY );
 
-    // Fill submenu "Sort". Do not add only one sort-by menu item - use
+    // Fill submenu "Sort". Do not add single sort-by menu item - use
     // only "Ascending" and "Descending" for sorting.
     if ( pDataSrc->pDSInfo->cSortBy > 1 )
     {
@@ -418,22 +420,28 @@ static MRESULT _wmSLSetDataSrc(HWND hwnd, MPARAM mp1, MPARAM mp2)
            stMINew.iPosition++, stMINew.id++ )
       {
         stMINew.afAttribute =
-          (ulSort & DSSORT_VALUE_MASK) == stMINew.iPosition ?
-             MIA_CHECKED : 0;
+          (ulSort & DSSORT_VALUE_MASK) == stMINew.iPosition ? MIA_CHECKED : 0;
 
-        WinSendMsg( stMISort.hwndSubMenu, MM_INSERTITEM,
-          MPFROMP( &stMINew ),
-          MPFROMP( pDataSrc->pDSInfo->apszSortBy[stMINew.iPosition] ) );
-        WinSendMsg( stMICtxSort.hwndSubMenu, MM_INSERTITEM,
-          MPFROMP( &stMINew ),
-          MPFROMP( pDataSrc->pDSInfo->apszSortBy[stMINew.iPosition] ) );
+        if ( (pDataSrc->pDSInfo->ulFlags & DS_FL_RES_SORT_BY) != 0 )
+        {
+          strLoad( pDataSrc->hModule,
+                   (ULONG)pDataSrc->pDSInfo->_sortBy.aulResId[stMINew.iPosition],
+                   sizeof(szBuf), &szBuf );
+          pcChar = &szBuf;
+        }
+        else
+          pcChar = pDataSrc->pDSInfo->_sortBy.apszStr[stMINew.iPosition];
+
+        WinSendMsg( stMISort.hwndSubMenu, MM_INSERTITEM, MPFROMP( &stMINew ),
+                    pcChar );
+        WinSendMsg( stMICtxSort.hwndSubMenu, MM_INSERTITEM, MPFROMP( &stMINew ),
+                    pcChar );
       }
 
-      // Add separator
+      // Add separator.
       stMINew.afStyle = MIS_SEPARATOR;
       stMINew.afAttribute = 0;
-      WinSendMsg( stMISort.hwndSubMenu, MM_INSERTITEM,
-                  MPFROMP( &stMINew ), 0 );
+      WinSendMsg( stMISort.hwndSubMenu, MM_INSERTITEM, MPFROMP( &stMINew ), 0 );
       WinSendMsg( stMICtxSort.hwndSubMenu, MM_INSERTITEM,
                   MPFROMP( &stMINew ), 0 );
     }
@@ -527,6 +535,10 @@ MRESULT EXPENTRY ListWndProc(HWND hwnd, ULONG msg, MPARAM mp1, MPARAM mp2)
       WinPostMsg( hwnd, WM_SL_ORDERITEMS, 0, 0 );
       return (MRESULT)FALSE;
 
+    case WM_HELP:
+      itemsHelp( TRUE );
+      return (MRESULT)FALSE;
+
     case WM_CHAR:
       if ( (SHORT1FROMMP(mp1) & (KC_VIRTUALKEY | KC_KEYUP)) != KC_VIRTUALKEY )
         break;
@@ -557,12 +569,19 @@ MRESULT EXPENTRY ListWndProc(HWND hwnd, ULONG msg, MPARAM mp1, MPARAM mp2)
         default:
           return WinDefWindowProc( hwnd, msg, mp1, mp2 );
       }
+          return WinDefWindowProc( hwnd, msg, mp1, mp2 );
       return (MRESULT)FALSE;
 
     case WM_COMMAND:
       {
         USHORT		usCommand = SHORT1FROMMP(mp1);
         PDATASOURCE	pDataSrc;
+
+        if ( usCommand == IDM_HELP )
+        {
+          itemsHelp( TRUE );
+          return (MRESULT)FALSE;
+        }
 
         if ( usCommand == IDM_SORT_ASCN || usCommand == IDM_SORT_DESCN ||
              ( usCommand >= IDM_SORT_FIRST_ID &&

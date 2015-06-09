@@ -8,23 +8,24 @@
 !error Variable SRCS must be specified in your makefile!
 !endif
 
+# Information Presentation Facility Compiler from IBM OS/2 Developer's Toolkit.
+IPFC = ipfc.exe
 
 !ifeq RCTK 1
 
 # You can use Resource Compiler from IBM OS/2 Developer's Toolkit.
 # WMAKE rctk=1
-RCC = rc -r -n -x2
-RCL = rc -n >nul
+RCC = rc.exe -r -n -x2
+RCL = rc.exe -n
 
 !else
 
 # Open Watcom Resource Compiler Version 2.0 beta must be used. Older versions
 # creates incorrect .RES files.
-RCC = wrc -q -r
-RCL = wrc -q
+RCC = wrc.exe -q -r
+RCL = wrc.exe -q
 
 !endif
-
 
 DLLPATH = ..\..\bin
 INCPATH = $(%WATCOM)\H\OS2;$(%WATCOM)\H;..\..\sl;$(INCPATH)
@@ -33,6 +34,10 @@ CFLAGS += -i=$(INCPATH) -bt=os2 -q -d0 -w2 -bw -bd -fo=.\
 
 DLLFILE = $(PLUGIN).dll
 LNKFILE = $(PLUGIN).lnk
+
+!ifdef IPF
+HLPFILE = $(DLLPATH)\$(PLUGIN).hlp
+!endif
 
 OBJS = $(SRCS:.c=.obj)
 RESFILE = $(RCFILE:.rc=.res)
@@ -54,7 +59,7 @@ VERSION = 1.0.0
 .extensions: .lib .dll .obj .c .cpp .asm .rc .res
 
 
-$(DLLPATH)\$(DLLFILE): infCompiling $(OBJS) $(LNKFILE) $(RESFILE)
+$(DLLPATH)\$(DLLFILE): infCompiling $(OBJS) $(LNKFILE) $(RESFILE) $(HLPFILE)
   @echo *  Linking: $@
   wlink @$(LNKFILE)
 !ifdef RCFILE
@@ -84,6 +89,13 @@ $(LNKFILE): .ALWAYS
   @%append $@ OPTION MANYAUTODATA
   @%append $@ OPTION QUIET
   @%append $@ OPTION OSNAME='OS/2 and eComStation'
+#
+# WATCOM os2386.lib does not imports this functions:
+  @%append $@ IMPORT DosGetProcessorStatus           DOSCALLS .447
+  @%append $@ IMPORT DosSetProcessorStatus           DOSCALLS .448
+  @%append $@ IMPORT DosQueryThreadAffinity          DOSCALLS .563
+  @%append $@ IMPORT DosSetThreadAffinity            DOSCALLS .564
+#
   @for %i in ($(OBJS)) do @%append $@ FILE %i
 !ifdef LIBPATH
   @%append $@ LIBPATH $(LIBPATH)
@@ -97,15 +109,20 @@ $(LNKFILE): .ALWAYS
   @%append $@ OPTION DESCRIPTION '@$#$(AUTOR):$(VERSION)$#@$#$#1$#$#                          $(%HOSTNAME)::ru:RUS:0::@@$(COMMENT)'
 !endif
 
+!ifdef IPF
+$(HLPFILE) : $(IPF)
+  @echo *  Compiling help from $[@
+  $(IPFC) $[@ $@ >nul
+!endif
+
 infCompiling: .SYMBOLIC
   @echo *  Compiling: plugin $(PLUGIN) $(VERSION) ...
 
-.SILENT
 clean: .SYMBOLIC
-  if exist *.obj del *.obj
-  if exist *.err del *.err
-  if exist $(LNKFILE) del $(LNKFILE)
-  if exist $(PLUGIN).map del $(PLUGIN).map
+  @if exist *.obj @del *.obj
+  @if exist *.err @del *.err
+  @if exist $(LNKFILE) @del $(LNKFILE)
+  @if exist $(PLUGIN).map @del $(PLUGIN).map
 !ifdef RCFILE
-  if exist $(RESFILE) del $(RESFILE)
+  @if exist $(RESFILE) @del $(RESFILE)
 !endif

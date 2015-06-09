@@ -44,8 +44,7 @@ bldlevel.obj: ..\getver\bldlevel.c
 .c.obj:
   wcc386 $(CFLAGS) $<
 
-.SILENT
 clean: .SYMBOLIC
-  if exist *.obj del *.obj
-  if exist rxgetver.lnk del rxgetver.lnk
-#  if exist $(BINPATH)\$(BINFILE) del $(BINPATH)\$(BINFILE)
+  @if exist *.obj @del *.obj
+  @if exist rxgetver.lnk @del rxgetver.lnk
+

@@ -6,11 +6,12 @@ ICON ID_ICON_CPUOFF		"cpu-off.ico"
 
 STRINGTABLE PRELOAD
 {
+  IDS_DS_TITLE		"~CPU"
   IDS_CPU		"CPU"
-  IDS_LOAD		"Load:"
   IDS_USER		"User"
   IDS_IRQ		"IRQ"
-  IDS_FEATURES		"S~how features"
+  IDS_TEMP		"Temp."
+  IDS_FEATURES		"Sho~w features"
   IDS_ONLINE		"~Online"
   IDS_OFFLINE		"O~ffline"
 
@@ -24,18 +25,23 @@ DLGTEMPLATE IDD_DSPROPERTIES1
           FS_NOBYTEALIGN | NOT FS_DLGBORDER
           PRESPARAMS PP_FONTNAMESIZE, "9.WarpSans"
   {
-    CONTROL "Temperature", IDD_GB_TEMPERATURE, 5, 80, 155, 50, WC_STATIC,
-            SS_GROUPBOX | DT_LEFT | DT_TOP | DT_MNEMONIC | WS_VISIBLE | WS_GROUP
-    CONTROL "~ACPI table pathname:", IDD_ST_PATHNAME, 12, 113, 141, 8, WC_STATIC,
-            SS_TEXT | DT_LEFT | DT_TOP | DT_MNEMONIC | WS_VISIBLE
-    CONTROL "",  IDD_CB_PATHNAME, 12, 76, 141, 37, WC_COMBOBOX,
-            CBS_DROPDOWN | WS_GROUP | WS_TABSTOP | WS_VISIBLE
+    CONTROL "To display temperature of each CPU you need a driver RDMSR$.",
+            IDD_ST_NEED_DRIVER, 5, 145, 155, 8, WC_STATIC,
+            SS_TEXT | DT_LEFT | DT_BOTTOM
+    CONTROL "~Install", IDD_PB_INSTALL_DRIVER, 115, 132, 40, 10, WC_BUTTON,
+            BS_PUSHBUTTON | WS_TABSTOP
 
-    CONTROL "~Celsius (øC)", IDD_RB_TEMP_C, 10, 93, 58, 8, WC_BUTTON,
-            BS_AUTORADIOBUTTON | WS_VISIBLE | WS_GROUP
-    CONTROL "~Fahrenheit (øF)", IDD_RB_TEMP_F, 10, 84, 58, 8, WC_BUTTON,
+    CONTROL "Temperature", IDD_GB_TEMPERATURE, 5, 80, 155, 50, WC_STATIC,
+            SS_GROUPBOX | DT_LEFT | DT_TOP | DT_MNEMONIC | WS_VISIBLE
+    CONTROL "~Celsius (øC)", IDD_RB_TEMP_C, 10, 113, 58, 8, WC_BUTTON,
+            BS_AUTORADIOBUTTON | WS_VISIBLE | WS_GROUP | WS_TABSTOP
+    CONTROL "~Fahrenheit (øF)", IDD_RB_TEMP_F, 10, 104, 58, 8, WC_BUTTON,
             BS_AUTORADIOBUTTON | WS_VISIBLE
-    CONTROL "~Test", IDD_PB_TEST, 113, 84, 40, 10, WC_BUTTON,
+    CONTROL "~ACPI Thermal Zone pathname:", IDD_ST_PATHNAME, 12, 93, 100, 8, WC_STATIC,
+            SS_TEXT | DT_LEFT | DT_TOP | DT_MNEMONIC | WS_VISIBLE
+    CONTROL "",  IDD_CB_PATHNAME, 12, 56, 100, 37, WC_COMBOBOX,
+            CBS_DROPDOWN | WS_GROUP | WS_TABSTOP | WS_VISIBLE
+    CONTROL "~Test", IDD_PB_TEST, 115, 84, 40, 10, WC_BUTTON,
             BS_PUSHBUTTON | WS_VISIBLE | WS_TABSTOP
 
     CONTROL "~Show real frequency", IDD_CB_REALFREQ, 5, 67, 150, 8, WC_BUTTON,
@@ -58,24 +64,6 @@ DLGTEMPLATE IDD_DSPROPERTIES1
             SS_GROUPBOX | DT_LEFT | DT_TOP | DT_MNEMONIC | WS_VISIBLE | WS_GROUP
     CONTROL "IRQ", IDD_ST_IRQCOL, 167, 9, 34, 10, WC_STATIC,
             SS_TEXT | DT_LEFT | DT_TOP | WS_VISIBLE | WS_TABSTOP
-  }
-}
-
-DLGTEMPLATE IDD_DSPROPERTIES2
-{
-  DIALOG  "CPU, page 2", IDD_DSPROPERTIES2, 0, 0, 240, 146,
-          FS_NOBYTEALIGN | NOT FS_DLGBORDER
-          PRESPARAMS PP_FONTNAMESIZE, "9.WarpSans"
-  {
-    CONTROL "Load rates", IDD_GB_LOADRATES, 5, 5, 200, 42, WC_STATIC,
-            SS_GROUPBOX | DT_LEFT | DT_TOP | DT_MNEMONIC | WS_VISIBLE |
-            WS_TABSTOP | WS_GROUP
-    CONTROL "~Total load of each CPU", IDD_RB_SRNONE, 10, 30, 100, 8, WC_BUTTON,
-            BS_AUTORADIOBUTTON | WS_VISIBLE | WS_GROUP
-    CONTROL "Separate USER/IRQ loads for CPU ~0", IDD_RB_SRCPU0, 10, 20, 100, 8, WC_BUTTON,
-            BS_AUTORADIOBUTTON | WS_VISIBLE
-    CONTROL "Separate USER/IRQ loads for ~all CPUs", IDD_RB_SRALL, 10, 10, 100, 8, WC_BUTTON,
-            BS_AUTORADIOBUTTON | WS_VISIBLE
   }
 }
 
@@ -131,12 +119,12 @@ DLGTEMPLATE IDD_FEATURES
 
 MESSAGETABLE
 {
-  IDMSG_PT_OK			"CPU temperature determined successfully."
-  IDMSG_PT_BAD_PATHNAME		"An invalid character was found in a pathname."
-  IDMSG_PT_NOT_FOUND		"The name was not found in the namespace."
-  IDMSG_PT_INVALID_TYPE 	"The object type is incorrect."
-  IDMSG_PT_ACPI_INCOMP_VER	"This program is not compatible with the version of ACPI that is installed."
-  IDMSG_PT_INVALID_VALUE	"The object contains an invalid value."
+  IDMSG_TZ_OK			"Thermal Zone determined successfully."
+  IDMSG_TZ_BAD_PATHNAME		"An invalid character was found in a pathname."
+  IDMSG_TZ_NOT_FOUND		"The name was not found in the namespace."
+  IDMSG_TZ_INVALID_TYPE 	"The object type is incorrect."
+  IDMSG_TZ_ACPI_INCOMP_VER	"This program is not compatible with the version of ACPI that is installed."
+  IDMSG_TZ_INVALID_VALUE	"The object contains an invalid value."
 
   IDMSG_PF_CPUSTRING		"CPU String: %1"
   IDMSG_PF_STEPPINGID		"Stepping ID = %1"
@@ -223,4 +211,8 @@ MESSAGETABLE
   IDMSG_PF_CACHELINESIZE	"Cache Line Size = %1"
   IDMSG_PF_L2ASSOCIATIVITY	"L2 Associativity = %1"
   IDMSG_PF_CACHESIZE		"Cache Size = %1K"
+
+  IDMSG_COPY_FAIL		"Cannot copy file\n%1\nto %2"
+  IDMSG_INSTALL_FAIL		"Error while installing a driver. Please add following line to your CONFIG.SYS:\nDEVICE=%1"
+  IDMSG_INSTALL_OK		"The driver has been successfully installed. Reboot the system for the changes to take effect."
 }

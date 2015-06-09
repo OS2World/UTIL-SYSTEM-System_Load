@@ -13,8 +13,8 @@
 #include <unistd.h>
 #include <ds.h>
 #include <sl.h>
+#include <debug.h>
 #include "net.h"
-#include "debug.h"
 
 
 #define MAX_INTERFACES		IFMIB_ENTRIES
@@ -64,16 +64,27 @@ typedef struct _IOSTATAT {
 
 // Module information
 
-static PSZ		 apszFields[FIELDS] = { NULL };
+static ULONG	 aulFields[FIELDS] = {
+  IDS_FLD_INDEX,	// 0 - FLD_INDEX
+  IDS_FLD_DESCR,	// 1 - FLD_DESCRIPTION
+  IDS_FLD_TYPE,		// 2 - FLD_TYPE
+  IDS_FLD_MAC,		// 3 - FLD_MAC
+  IDS_FLD_SENT,		// 4 - FLD_BYTESSENT
+  IDS_FLD_RECV,		// 5 - FLD_BYTESRECV
+  IDS_FLD_TXSPD,	// 6 - FLD_TXSPEED
+  IDS_FLD_RXSPD		// 7 - FLD_RXSPEED
+};
 
 static DSINFO stDSInfo = {
   sizeof(DSINFO),			// Size of this data structure.
-  "~Network",				// Menu item title
+  (PSZ)IDS_DS_TITLE,			// Menu item title
   FIELDS,				// Number of "sort-by" strings
-  &apszFields,				// "Sort-by" strings.
-  0,					// Flags DS_FL_*
+  (PSZ *)&aulFields,			// "Sort-by" strings.
+  DS_FL_RES_MENU_TITLE |		// Flags DS_FL_*
+  DS_FL_RES_SORT_BY,
   70,					// Items horisontal space, %Em
-  50					// Items vertical space, %Em
+  50,					// Items vertical space, %Em
+  0					// Help main panel index.
 };
 
 // Graph Options
@@ -85,12 +96,14 @@ static GRVALPARAM	aGrValParam[2] =
   // RX graph
   {
     DEF_RXCOLOR,	// clrGraph
-    2			// lLineWidth
+    2,			// lLineWidth
+    0			// ulPlygonBright
   },
   // TX graph
   {
     DEF_TXCOLOR,	// clrGraph
-    2			// lLineWidth
+    2,			// lLineWidth
+    0			// ulPlygonBright
   }
 };
 
@@ -127,18 +140,6 @@ PROPERTIES		stProperties =
 static PSZ		apszOperStatus[7] =
   { "Up", "Down", "Testing", "Unknown", "Dormant", "Not present",
     "Lower layer down" };
-// Resource IDs for fields names.
-static ULONG aulFldStrId[] = {
-  IDS_FLD_INDEX,	// 0 - FLD_INDEX
-  IDS_FLD_DESCR,	// 1 - FLD_DESCRIPTION
-  IDS_FLD_TYPE,		// 2 - FLD_TYPE
-  IDS_FLD_MAC,		// 3 - FLD_MAC
-  IDS_FLD_SENT,		// 4 - FLD_BYTESSENT
-  IDS_FLD_RECV,		// 5 - FLD_BYTESRECV
-  IDS_FLD_TXSPD,	// 6 - FLD_TXSPEED
-  IDS_FLD_RXSPD		// 7 - FLD_RXSPEED
-};
-
 
 // ulIdxWidth
 //    | ulLPad        ulInfWidth      ulRPad
@@ -311,9 +312,6 @@ static LONG grValToStr(ULONG ulVal, PCHAR pcBuf, ULONG cbBuf)
 
 DSEXPORT PDSINFO APIENTRY dsInstall(HMODULE hMod, PSLINFO pSLInfo)
 {
-  ULONG		ulIdx;
-  CHAR		szBuf[128];
-
   debugInit();
 
   // Store module handle of data source
@@ -342,28 +340,12 @@ DSEXPORT PDSINFO APIENTRY dsInstall(HMODULE hMod, PSLINFO pSLInfo)
   pstrLoad = (PHstrLoad)pSLInfo->slQueryHelper( "strLoad" );
   pctrlStaticToColorRect = (PHctrlStaticToColorRect)pSLInfo->slQueryHelper( "ctrlStaticToColorRect" );
 
-  // Load names of fields
-  for( ulIdx = 0; ulIdx < FIELDS; ulIdx++ )
-  {
-    pstrLoad( hMod, aulFldStrId[ulIdx], sizeof(szBuf), &szBuf );
-    apszFields[ulIdx] = debugStrDup( &szBuf );
-  }
-
   // Return data source information for main program
   return &stDSInfo;
 }
 
 DSEXPORT VOID APIENTRY dsUninstall()
 {
-  ULONG		ulIdx;
-
-  debug( "Free names of fields..." );
-  for( ulIdx = 0; ulIdx < FIELDS; ulIdx++ )
-  {
-    if ( apszFields[ulIdx] != NULL )
-      debugFree( apszFields[ulIdx] );
-  }
-
   debugDone();
 }
 
@@ -386,23 +368,12 @@ DSEXPORT BOOL APIENTRY dsInit()
     return FALSE;
   }
 
-  ulTime = stProperties.ulTimeWindow * 1000; /* Time window, msec. */
-  ulValWindow = ulTime / stProperties.ulUpdateInterval;
-
-  if ( !pgrInit( &stGraph, ulValWindow, ulTime, 0, 1024 ) )
-  {
-    debug( "grInit() fail" );
-    debugFree( pstStatAT );
-    return FALSE;
-  }
-
   sock_init();
   iSock = socket( AF_INET, SOCK_RAW, 0 );
   if ( iSock == -1 )
   {
     debug( "Cannot create a socket" );
     debugFree( pstStatAT );
-    pgrDone( &stGraph );
     return FALSE;
   }
 
@@ -418,8 +389,7 @@ DSEXPORT BOOL APIENTRY dsInit()
     piniReadULong( hDSModule, "TXColor", DEF_TXCOLOR );
 
   stProperties.ulSort = piniReadULong( hDSModule, "Sort", FLD_INDEX );
-  stProperties.fSortDesc = piniReadULong( hDSModule,
-                                                     "SortDesc", FALSE );
+  stProperties.fSortDesc = piniReadULong( hDSModule, "SortDesc", FALSE );
   stProperties.ulUpdateInterval = piniReadULong( hDSModule,
                                     "UpdateInterval", DEF_INTERVAL );
   if ( stProperties.ulUpdateInterval < 500 ||
@@ -428,6 +398,17 @@ DSEXPORT BOOL APIENTRY dsInit()
     stProperties.ulUpdateInterval = DEF_INTERVAL;
   stProperties.ulTimeWindow = piniReadULong( hDSModule,
                                     "TimeWindow", DEF_TIMEWIN );
+
+  ulTime = stProperties.ulTimeWindow * 1000; /* Time window, msec. */
+  ulValWindow = ulTime / stProperties.ulUpdateInterval;
+
+  if ( !pgrInit( &stGraph, ulValWindow, ulTime, 0, 1024 ) )
+  {
+    debug( "grInit() fail" );
+    soclose( iSock );
+    debugFree( pstStatAT );
+    return FALSE;
+  }
 
   return TRUE;
 }
@@ -473,7 +454,6 @@ DSEXPORT ULONG APIENTRY dsUpdate(ULONG ulTime)
   BOOL			fFound;
   BOOL			fInterval;
   ULONG			ulInterval;
-//  PINTERFACE		apInterfacesOld[MAX_INTERFACES];
 
   if ( os2_ioctl( iSock, SIOSTATIF42, (caddr_t)&stIfMIB,
                   sizeof(struct ifmib) ) == -1 )
@@ -482,7 +462,6 @@ DSEXPORT ULONG APIENTRY dsUpdate(ULONG ulTime)
     return DS_UPD_NONE;
   }
 
-//  memcpy( &apInterfacesOld, &apInterfaces, cInterfaces * sizeof(PINTERFACE) );
   fInterval = pgrGetTimestamp( &stGraph, &ulInterval );
   pgrNewTimestamp( &stGraph, ulTime );
   if ( fInterval )
@@ -595,10 +574,6 @@ DSEXPORT ULONG APIENTRY dsUpdate(ULONG ulTime)
 
   // Sort list of interfaces.
   qsort( apInterfaces, cInterfaces, sizeof(PINTERFACE), _sortComp );
-
-  // Check - does order of records changed?
-//  fListChanged = memcmp( &apInterfacesOld, &apInterfaces,
-//                         cInterfaces * sizeof(PINTERFACE) ) != 0;
 
   // Gets all interface addresses.
   if ( os2_ioctl( iSock, SIOSTATAT, (caddr_t)pstStatAT,

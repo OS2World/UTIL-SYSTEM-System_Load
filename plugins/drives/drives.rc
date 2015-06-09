@@ -12,6 +12,7 @@ ICON IDI_REMOTE			remote.ico
 
 STRINGTABLE PRELOAD
 {
+  IDS_DS_TITLE		"~Drives"
   IDS_FLD_LETTER	"Letter"
   IDS_FLD_TOTAL		"Total bytes"
   IDS_FLD_FREE		"Free bytes"
@@ -25,6 +26,7 @@ STRINGTABLE PRELOAD
   IDS_DTL_FREE		"Free bytes:"
   IDS_MI_OPEN		"~Open"
   IDS_MI_EJECT		"~Eject"
+  IDS_BOOT		"(boot)"
 }
 
 DLGTEMPLATE IDD_DSPROPERTIES

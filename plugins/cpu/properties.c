@@ -1,12 +1,15 @@
 #define INCL_DOSMISC
+#define INCL_DOSERRORS
 #include <ds.h>
 #include <sl.h>
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
+#include <ctype.h>
 #include "cpu.h"
 #include "ctrl.h"
-#include "proctemp.h"
+#include "termzone.h"
+#include "cputemp.h"
 #include "debug.h"
 
 #define COLOR_VPAD	8
@@ -14,13 +17,14 @@
 extern GRPARAM		stGrParam;	// cpu.c
 extern GRAPH		stGraph;	// cpu.c
 extern HMODULE		hDSModule;	// Module handle, cpu.c
+extern HAB		hab;
 extern ULONG		cCPU;		// CPU count, cpu.c
 extern PGRVALPARAM	pGrValParam;	// All graphs (CPU and IRQ) paramethrs.
 extern ULONG		ulTimeWindow;	// Graph's time window, cpu.c
 extern LONG		aulDefColors[];
 extern PSZ		pszTZPathname;  // ACPI pathname for temperature, cpu.c
-extern ULONG		ul’emperature;  // Current t*10, cpu.c
-extern ULONG		ulPTMU;		// PT_MU_CELSIUS/PT_MU_FAHRENHEIT, cpu.c
+extern ULONG		ulTemperature;  // Current t*10, cpu.c
+extern ULONG		ulPTMU;		// TZ_MU_CELSIUS/TZ_MU_FAHRENHEIT, cpu.c
 extern BOOL		fRealFreq;	// Show real frequency, cpu.c
 extern ULONG		ulSeparateRates;// Show separate rates user/IRQ loads
 
@@ -29,12 +33,15 @@ extern PHiniWriteStr			piniWriteStr;
 extern PHiniWriteULong			piniWriteULong;
 extern PHgrSetTimeScale			pgrSetTimeScale;
 extern PHutilGetTextSize		putilGetTextSize;
+extern PHutilLoadInsertStr		putilLoadInsertStr;
+extern PHutilQueryProgPath		putilQueryProgPath;
 extern PHupdateLock			pupdateLock;
 extern PHupdateUnlock			pupdateUnlock;
 extern PHstrLoad			pstrLoad;
 extern PHctrlStaticToColorRect		pctrlStaticToColorRect;
 extern PHctrlDlgCenterOwner		pctrlDlgCenterOwner;
 extern PHctrlQueryText			pctrlQueryText;
+extern PHhelpShow			phelpShow;
 
 static LONG		clrBackground;
 static LONG		clrBorder;
@@ -44,15 +51,205 @@ static LONG		aclrCPU[65];
 //	Page 1
 //	------
 
+static VOID _installDriver(HWND hwnd)
+{
+  static CHAR	szDstPath[] = "C:\\OS2";
+  static CHAR	szConfig[] = "C:\\CONFIG.SYS";
+  CHAR		szSrcFile[CCHMAXPATH];
+  CHAR		szBuf[256 + CCHMAXPATH];
+  ULONG		ulRC;
+  ULONG		ulBootDrv;
+  FILESTATUS3 	sInfo;
+  PCHAR		pcConfig = NULL;
+  HFILE		hConfig;
+  ULONG		ulActual;
+  PCHAR		pcDriver;
+  PSZ		apszVal[2];
+
+  // Query boot drive and correct letter in szDstPath and szConfig.
+  ulRC = DosQuerySysInfo( QSV_BOOT_DRIVE, QSV_BOOT_DRIVE, &ulBootDrv,
+                          sizeof(ULONG) );
+  if ( ulRC != NO_ERROR )
+    debug( "DosQuerySysInfo(), rc = %u", ulRC );
+  else
+  {
+    // DosQuerySysInfo() returns 1 for A:, 2 - B:, e.t.c...
+    szDstPath[0] = 'A' + ulBootDrv - 1;
+    szConfig[0] = szDstPath[0];
+  }
+
+  // Copy driver file to the directory D:\OS2 (where D is a boot drive).
+
+  // Make full file name: program's path + DRMSR.SYS.
+  ulRC = putilQueryProgPath( sizeof(szSrcFile), &szSrcFile );
+  strcpy( &szSrcFile[ulRC], "RDMSR.SYS" );
+  // Try to copy file to system directory.
+  ulRC = DosCopy( szSrcFile, szDstPath, 0 );
+  // ERROR_PATH_NOT_FOUND - have not source file to copy,
+  // ERROR_ACCESS_DENIED - destination file already exists (Ok).
+  if ( ulRC != NO_ERROR && ulRC != ERROR_ACCESS_DENIED )
+  {
+    // Show "Cannot copy file ..." message.
+    apszVal[0] = &szSrcFile;
+    apszVal[1] = &szDstPath;
+    putilLoadInsertStr( hDSModule, FALSE, IDMSG_COPY_FAIL, 2, apszVal,
+                        sizeof(szBuf), &szBuf );
+    WinMessageBox( HWND_DESKTOP, hwnd, &szBuf, NULL, 0, MB_MOVEABLE|MB_ERROR );
+    return;
+  }
+
+  // Add driver to config.sys
+
+  do
+  {
+    ulRC = DosQueryPathInfo( &szConfig, FIL_STANDARD, &sInfo,
+                             sizeof(FILESTATUS3) );
+    if ( ulRC != NO_ERROR || (sInfo.attrFile & FILE_DIRECTORY) != 0 )
+    {
+      debug( "DosQueryPathInfo(), rc = %u", ulRC );
+      break;
+    }
+
+    // Need additional space for "DRIVER=C:\OS2\RDMSR.SYS\r\n" and ZERO.
+    pcConfig = debugMAlloc( sInfo.cbFile + 32 );
+    if ( pcConfig == NULL )
+    {
+      debug( "Not enough memory" );
+      break;
+    }
+
+    // Read CONFIG.SYS to the memory.
+
+    ulRC = DosOpen( &szConfig, &hConfig, &ulActual, 0, 0,
+                    OPEN_ACTION_FAIL_IF_NEW | OPEN_ACTION_OPEN_IF_EXISTS,
+                    OPEN_SHARE_DENYWRITE | OPEN_ACCESS_READONLY |
+                    OPEN_FLAGS_FAIL_ON_ERROR, NULL );
+    if ( ulRC != NO_ERROR )
+    {
+      debug( "DosOpen(%s,...), rc = %u", &szConfig, ulRC );
+      break;
+    }
+
+    ulRC = DosRead( hConfig, pcConfig, sInfo.cbFile, &ulActual );
+    DosClose( hConfig );
+    if ( ulRC != NO_ERROR )
+    {
+      debug( "DosRead(), rc = %u", ulRC );
+      break;
+    }
+    pcConfig[sInfo.cbFile] = '\0';
+
+    // Remove all strings DEVICE=d:\path\RDMSR.SYS.
+
+    for( pcDriver = pcConfig; *pcDriver != '\0'; pcDriver++ )
+    {
+      if ( strchr( " \t=\\", *pcDriver ) != NULL &&
+           memicmp( &pcDriver[1], "RDMSR.SYS", 9 ) == 0 &&
+           ( isspace( pcDriver[10] ) || pcDriver[10] == '\0' ) )
+      {
+        PCHAR	pcLine = pcDriver;
+        PCHAR	pcFirstChar;
+
+        do
+        {
+          pcLine--;
+          if ( *pcLine == '\n' || *pcLine == '\r' )
+          {
+            pcLine++;
+            break;
+          }
+        }
+        while( pcLine > pcConfig );
+
+        pcFirstChar = pcLine;
+        while( isspace( *pcFirstChar ) )
+          pcFirstChar++;
+
+        if ( memicmp( pcFirstChar, "DEVICE", 6 ) == 0 )
+        {
+          while( *pcFirstChar != '\r' && *pcFirstChar != '\n' &&
+                 *pcFirstChar != '\0' )
+            pcFirstChar++;
+
+          if ( pcFirstChar != '\0' )
+          {
+            while( *pcFirstChar == '\r' || *pcFirstChar == '\n' )
+              pcFirstChar++;
+            memcpy( pcLine, pcFirstChar, strlen( pcFirstChar ) + 1 );
+            pcDriver = pcLine;
+          }
+        }
+      }
+    }
+
+    // Remove trailing spaces and empty lines in loaded CONFIG.SYS.
+    pcDriver = strchr( pcConfig, '\0' );
+    while( ( pcDriver > pcConfig ) && isspace( *(pcDriver - 1) ) )
+      pcDriver--;
+    // Add DEVICE=... line.
+    sprintf( pcDriver, "\r\nDEVICE=%s\\RDMSR.SYS\r\n", szDstPath );
+
+    // Rename old C:\CONFIG.SYS to *.SL
+    strcpy( &szBuf, &szConfig );
+    *((PULONG)&szBuf[9]) = '\0LS.';
+    DosDelete( &szBuf );
+    ulRC = DosMove( &szConfig, &szBuf );
+    if ( ulRC != NO_ERROR )
+    {
+      debug( "DosMove(), rc = %u", ulRC );
+      break;
+    }
+
+    // Store new CONFIG.SYS
+
+    ulRC = DosOpen( &szConfig, &hConfig, &ulActual, 0, 0,
+                    OPEN_ACTION_CREATE_IF_NEW | OPEN_ACTION_FAIL_IF_EXISTS,
+                    OPEN_SHARE_DENYREADWRITE | OPEN_ACCESS_WRITEONLY |
+                    OPEN_FLAGS_FAIL_ON_ERROR, NULL );
+    if ( ulRC != NO_ERROR )
+    {
+      debug( "DosOpen(%s,...), rc = %u", &szConfig, ulRC );
+      break;
+    }
+
+    ulRC = DosWrite( hConfig, pcConfig, strlen( pcConfig ), &ulActual );
+    if ( ulRC != NO_ERROR )
+    {
+      debug( "DosWrite(), rc = %u", ulRC );
+      break;
+    }
+    DosClose( hConfig );
+
+    debugFree( pcConfig );
+
+    // Message.
+    WinLoadMessage( hab, hDSModule, IDMSG_INSTALL_OK, sizeof(szBuf), &szBuf );
+    WinQueryWindowText( hwnd, sizeof(szSrcFile), &szSrcFile );
+    WinMessageBox( HWND_DESKTOP, hwnd, &szBuf, &szSrcFile, 0,
+                   MB_MOVEABLE | MB_OK | MB_INFORMATION );
+    return;
+  }
+  while( FALSE );
+
+  if ( pcConfig != NULL )
+    debugFree( pcConfig );
+
+  // Error message.
+  apszVal[0] = &szSrcFile;
+  putilLoadInsertStr( hDSModule, FALSE, IDMSG_INSTALL_FAIL, 1, &apszVal,
+                      sizeof(szBuf), &szBuf );
+  WinMessageBox( HWND_DESKTOP, hwnd, &szBuf, NULL, 0, MB_MOVEABLE|MB_ERROR );
+}
+
 static VOID _p1undo(HWND hwnd)
 {
   ULONG		ulIdx;
 
-  // ’emperature.
+  // Temperature.
 
   WinSetWindowText( WinWindowFromID( hwnd, IDD_CB_PATHNAME ), pszTZPathname );
   WinSendDlgItemMsg( hwnd,
-                     ulPTMU == PT_MU_CELSIUS ? IDD_RB_TEMP_C : IDD_RB_TEMP_F,
+                     ulPTMU == TZ_MU_CELSIUS ? IDD_RB_TEMP_C : IDD_RB_TEMP_F,
                      BM_SETCHECK, MPFROMSHORT( 1 ), 0 );
 
   // Show real frequency checkbox.
@@ -79,7 +276,7 @@ static VOID _p1default(HWND hwnd)
   ULONG		ulIdx;
   CHAR		szBuf[128];
 
-  // ’emperature.
+  // Temperature.
   // Try one by one pathnames from resource and set first line for which
   // temperature is found.
 
@@ -88,7 +285,7 @@ static VOID _p1default(HWND hwnd)
        pstrLoad( hDSModule, ulIdx, sizeof(szBuf), &szBuf ) != 0 &&
        szBuf[0] == '\\'; ulIdx++ ) 
   {
-    if ( ptQuery( &szBuf, ulPTMU, &ul’emperature ) != PT_OK )
+    if ( tzQuery( &szBuf, ulPTMU, &ulTemperature ) != TZ_OK )
       continue;
 
     WinSetWindowText( WinWindowFromID( hwnd, IDD_CB_PATHNAME ), &szBuf );
@@ -193,6 +390,14 @@ static VOID _p1wmInit(HWND hwnd, MPARAM mp1, MPARAM mp2)
   SWP		swpGB;
   HWND		hwndPathname = WinWindowFromID( hwnd, IDD_CB_PATHNAME );
   HPS		hps = WinGetPS( hwnd );
+
+  // Need driver message and button "Install".
+
+  if ( cputempQuery( 0, NULL, &ulIdx ) == CPUTEMP_NO_DRIVER )
+  {
+    WinShowWindow( WinWindowFromID( hwnd, IDD_ST_NEED_DRIVER ), TRUE );
+    WinShowWindow( WinWindowFromID( hwnd, IDD_PB_INSTALL_DRIVER ), TRUE );
+  }
 
   // Save current colors for undo.
 
@@ -312,7 +517,7 @@ static VOID _p1wmDestroy(HWND hwnd)
 
   if ( pszTZPathname != NULL )
     debugFree( pszTZPathname );
-  ul’emperature = (ULONG)(-1);
+  ulTemperature = (ULONG)(-1);
 
   cbBuf = pctrlQueryText( WinWindowFromID(hwnd, IDD_CB_PATHNAME),
                                          sizeof(szBuf), &szBuf );
@@ -331,13 +536,13 @@ static VOID _p1wmDestroy(HWND hwnd)
     {
       memcpy( pszTZPathname, pcBuf, cbBuf );
       pszTZPathname[cbBuf] = '\0';
-      // Do not leave ul’emperature == (ULONG)(-1) for updates.
-      ptQuery( pszTZPathname, ulPTMU, &ul’emperature );
+      // Do not leave ulTemperature == (ULONG)(-1) for updates.
+      tzQuery( pszTZPathname, ulPTMU, &ulTemperature );
     }
   }
 
   ulPTMU = WinSendDlgItemMsg( hwnd, IDD_RB_TEMP_C, BM_QUERYCHECK, 0, 0 ) != 0 ?
-             PT_MU_CELSIUS : PT_MU_FAHRENHEIT;
+             TZ_MU_CELSIUS : TZ_MU_FAHRENHEIT;
 
   // Apply graph time window.
 
@@ -417,11 +622,11 @@ static MRESULT EXPENTRY p1DialogProc(HWND hwnd, ULONG msg, MPARAM mp1, MPARAM mp
             // Try to query temperature of CPU.
             // Select a message from the resource corresponding to
             // the error code.
-            switch( ptQuery( &szMsg,
-                             fCelsius ? PT_MU_CELSIUS : PT_MU_FAHRENHEIT,
+            switch( tzQuery( &szMsg,
+                             fCelsius ? TZ_MU_CELSIUS : TZ_MU_FAHRENHEIT,
                              &ulT ) )
             {
-              case PT_OK:
+              case TZ_OK:
                 // Temperature is found out successfully.
 
                 // Show dialog with e-mail for new custom pathname.
@@ -429,28 +634,28 @@ static MRESULT EXPENTRY p1DialogProc(HWND hwnd, ULONG msg, MPARAM mp1, MPARAM mp
                   return (MRESULT)FALSE;
 
                 // Show a standard message for predefined pathname.
-                ulStrId = IDMSG_PT_OK;
+                ulStrId = IDMSG_TZ_OK;
                 ulMBFlags = MB_MOVEABLE | MB_INFORMATION | MB_OK;
                 break;
 
-              case PT_ACPI_INCOMP_VER:
-                ulStrId = IDMSG_PT_ACPI_INCOMP_VER;
+              case TZ_ACPI_INCOMP_VER:
+                ulStrId = IDMSG_TZ_ACPI_INCOMP_VER;
                 break;
 
-              case PT_INVALID_TYPE:
-                ulStrId = IDMSG_PT_INVALID_TYPE;
+              case TZ_INVALID_TYPE:
+                ulStrId = IDMSG_TZ_INVALID_TYPE;
                 break;
 
-              case PT_INVALID_VALUE:
-                ulStrId = IDMSG_PT_INVALID_VALUE;
+              case TZ_INVALID_VALUE:
+                ulStrId = IDMSG_TZ_INVALID_VALUE;
                 break;
 
-              case PT_BAD_PATHNAME:
-                ulStrId = IDMSG_PT_BAD_PATHNAME;
+              case TZ_BAD_PATHNAME:
+                ulStrId = IDMSG_TZ_BAD_PATHNAME;
                 break;
 
-              default: // PT_ACPI_EVALUATE_FAIL, PT_NOT_FOUND
-                ulStrId = IDMSG_PT_NOT_FOUND;
+              default: // TZ_ACPI_EVALUATE_FAIL, TZ_NOT_FOUND
+                ulStrId = IDMSG_TZ_NOT_FOUND;
                 break;
             }
 
@@ -467,6 +672,10 @@ static MRESULT EXPENTRY p1DialogProc(HWND hwnd, ULONG msg, MPARAM mp1, MPARAM mp
 
             WinMessageBox( HWND_DESKTOP, hwnd, &szMsg, &szTitle, 1, ulMBFlags );
           }
+          break;
+
+        case IDD_PB_INSTALL_DRIVER:
+          _installDriver( hwnd );
           break;
       }
       return (MRESULT)FALSE;
@@ -532,98 +741,15 @@ static MRESULT EXPENTRY p1DialogProc(HWND hwnd, ULONG msg, MPARAM mp1, MPARAM mp
           }
       }
       return (MRESULT)FALSE;
-  }
 
-  return WinDefDlgProc( hwnd, msg, mp1, mp2 );
-}
-
-
-//	Page 2
-//	------
-
-static ULONG		ulSaveSeparateRates;
-
-static VOID _p2undo(HWND hwnd)
-{
-  ULONG		ulCheckboxId;
-
-  ulSeparateRates = ulSaveSeparateRates;
-  switch( ulSeparateRates )
-  {
-    case CPU_SR_CPU0:
-      ulCheckboxId = IDD_RB_SRCPU0;
-      break;
-
-    case CPU_SR_ALL:
-      ulCheckboxId = IDD_RB_SRALL;
-      break;
-
-    default:	// CPU_SR_NONE
-      ulCheckboxId = IDD_RB_SRNONE;
-  }
-
-  WinSendDlgItemMsg( hwnd, ulCheckboxId, BM_SETCHECK, MPFROMSHORT( 1 ), 0 );
-}
-
-static VOID _p2default(HWND hwnd)
-{
-  ulSeparateRates = DEF_SEPARATERATES;
-
-  WinSendDlgItemMsg( hwnd,
-#if ( DEF_SEPARATERATES == CPU_SR_CPU0 )
-                     IDD_RB_SRCPU0,
-#elif ( DEF_SEPARATERATES == CPU_SR_ALL )
-                     IDD_RB_SRALL,
-#else
-                     IDD_RB_SRNONE,
-#endif
-                     BM_SETCHECK, MPFROMSHORT( 1 ), 0 );
-}
-
-static MRESULT EXPENTRY p2DialogProc(HWND hwnd, ULONG msg, MPARAM mp1, MPARAM mp2)
-{
-  switch( msg )
-  {
-    case WM_INITDLG:
-      ulSaveSeparateRates = ulSeparateRates;
-      // go to WM_SL_UNDO
-    case WM_SL_UNDO:
-      _p2undo( hwnd );
-      return (MRESULT)FALSE;
-
-    case WM_SL_DEFAULT:
-      _p2default( hwnd );
-      return (MRESULT)FALSE;
-
-    case WM_DESTROY:
-      piniWriteULong( hDSModule, "separateRates", ulSeparateRates );
-      break;
-
-    case WM_COMMAND:
-      return (MRESULT)FALSE; // avoiding close dialog by pressing ESC.
-
-    case WM_CONTROL:
-      if ( SHORT2FROMMP( mp1 ) == BN_CLICKED  )
-      switch( SHORT1FROMMP( mp1 ) )
-      {
-        case IDD_RB_SRNONE:
-          ulSeparateRates = CPU_SR_NONE;
-          break;
-
-        case IDD_RB_SRCPU0:
-          ulSeparateRates = CPU_SR_CPU0;
-          break;
-
-        case IDD_RB_SRALL:
-          ulSeparateRates = CPU_SR_ALL;
-          break;
-      }
+    case WM_SL_HELP:
+      // Button "Help" pressed - show help panel (see cpu.ipf).
+      phelpShow( hDSModule, 20802 );
       return (MRESULT)FALSE;
   }
 
   return WinDefDlgProc( hwnd, msg, mp1, mp2 );
 }
-
 
 
 // Data source's interface routine dsLoadDlg()
@@ -634,8 +760,5 @@ DSEXPORT ULONG APIENTRY dsLoadDlg(HWND hwndOwner, PHWND pahWnd)
   pahWnd[0] = WinLoadDlg( hwndOwner, hwndOwner, p1DialogProc,
                           hDSModule, IDD_DSPROPERTIES1, NULL );
 
-  pahWnd[1] = WinLoadDlg( hwndOwner, hwndOwner, p2DialogProc,
-                          hDSModule, IDD_DSPROPERTIES2, NULL );
-
-  return 2;
+  return 1;
 }

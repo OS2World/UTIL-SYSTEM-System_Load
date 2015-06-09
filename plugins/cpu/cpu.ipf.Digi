@@ -1,0 +1,38 @@
+:userdoc.
+.* 
+.* Main help panel
+.* ---------------
+:h1 res=20801.Processors
+:p.
+The list displays all available processors. Any of processors other than the
+first can be switched to the ONLINE or OFFLINE status from the context menu.
+However, programs like CPUGOV or ACPIDAEMON may set another status
+automatically. Presence of these processes you can determine in the module
+"Processes".
+.* 
+.* Properties help
+.* ---------------
+:h1 res=20802.Properties
+:p.
+:hp2.Temperature.:ehp2.
+The temperature can be obtained from various sources.
+:ul.
+:li.To obtain information from Intel processors sensors driver RDMSR$ needed.
+If access to the sensors on your processor supports and the driver is not
+installed you will be prompted to install the driver automatically.
+Or you can do it manually by specifying "DEVICE=C&colon.&bsl.PROGRAMS&bsl.SL&bsl.RDMSR.SYS"
+(where "C&colon.&bsl.PROGRAMS&bsl.SL&bsl." is a path to SystemLoad on your disk) in your
+CONFIG.SYS. If these temperatures are available, they are displayed near each
+CPU in the list.
+:li.Another source of information is Advanced Configuration and Power Interface
+(ACPI) which contains information about so-called Thermal Zones of the
+motherboard. This requires path in the ACPI table. Path will be determined
+automatically if the installed hardware supports. Custom values can be
+specified by the user. If the data are available then temperature of Thermal
+Zone is displayed above CPU load graph.
+:eul.
+:p.
+The switch :hp2.Show real frequency:ehp2. controls the display of CPU clock
+calculated real frequency.
+.* --------------------
+:euserdoc.

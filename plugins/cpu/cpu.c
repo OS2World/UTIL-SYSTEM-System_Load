@@ -4,6 +4,7 @@
 #define INCL_ERRORS
 #define INCL_WIN
 #define INCL_GPI
+#define INCL_DOSSPINLOCK
 #include <os2.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -11,7 +12,8 @@
 #include <ds.h>
 #include <sl.h>
 #include "cpu.h"
-#include "proctemp.h"
+#include "termzone.h"
+#include "cputemp.h"
 #include "debug.h"
 
 // CPU load bar
@@ -26,20 +28,18 @@
 #define UPDATE_INTERVAL		1000		// msec.
 
 HMODULE			hDSModule;	// Module handle.
+HAB			hab;
 // Default colors of CPU lines on graph.
 LONG			aulDefColors[DEF_COLORS] =
   { DEF_COLOR_1, DEF_COLOR_2, DEF_COLOR_3, DEF_COLOR_4 };
 // API functions (doscalls.dll).
-PDOSPERFSYSCALL		pDosPerfSysCall;
-PDOSGETPROCESSORSTATUS	pDosGetProcessorStatus = NULL;
-PDOSSETPROCESSORSTATUS	pDosSetProcessorStatus = NULL;
 ULONG			ulTimeWindow;	// Graph time window.
 ULONG			cCPU = 0;
 PCPU			pCPUList;	// CPU load data storages, last update
 					// timestamps, loads values and states.
-PSZ			pszTZPathname;  // ACPI pathname for temperature.
-ULONG			ul’emperature;  // Current t*10, (ULONG)(-1) - unknown
-ULONG			ulPTMU;		// PT_MU_CELSIUS / PT_MU_FAHRENHEIT
+PSZ			pszTZPathname;  // ACPI pathname for Thermal Zone.
+ULONG			ulTemperature;  // Current TZ t*10, (ULONG)(-1) - unknown
+ULONG			ulPTMU;		// TZ_MU_CELSIUS / TZ_MU_FAHRENHEIT
 BOOL			fRealFreq;	// Show real frequency.
 GRAPH			stGraph;
 PGRVALPARAM		pGrValParam;	// Graph paramethers for lines.
@@ -48,13 +48,17 @@ ULONG			ulSeparateRates;// Show separate rates user/IRQ loads
 // ulLastSeparateRates - Value of ulSeparateRates after last update.
 ULONG			ulLastSeparateRates;
 static GRVAL		stGrIRQVal;	// Graph values storage for IRQ.
-static HMODULE		hDosCalls;	// doscalls.dll module handle.
 static HPOINTER		hIcon;		// CPU online icon handle.
 static HPOINTER		hIconOff;	// CPU offline icon handle.
 static PCPUCNT		pCPUCounters;	// New values of counters for update.
 static ULLONG		ullCPU0Freq;	// Times per sec. detacted at last upd.
 static PSZ		pszBrandStr;	// CPU brand string or vendor.
 static PSIZEL		psizeEm;
+
+static PCPUTEMP		paCPUTemp;
+static ULONG		cCPUTempMax;
+static ULONG		cCPUTemp;	// not 0 - CPU temperature. available.
+
 
 // grValToStr() callback fn. for ordinate minimum and maximum captions.
 static LONG grValToStr(ULONG ulVal, PCHAR pcBuf, ULONG cbBuf);
@@ -74,46 +78,26 @@ GRPARAM			stGrParam =	// Graph paramethers for lines.
   NULL						// pParamVal
 };
 
-// Item window interior - view Load
-// ----------------------------------
-//                    ulHPad  ulTextLPad ulTextRPad ulHPad
-//                      |        |             |     |
-//                    |<->|    |<->|         |<->| |<->|
-// ulLine1YOffs
-// :                  +--------------------------------+ --,
-// :                  |                                |   |  ulVPad
-// :..................|...+----+...CPU 1         ===   | -< 
-//                    |   |Icon|                 ===   |   |- ulItemHeight
-// ...............,--.|...+----+...Load: 1.2 %   ===   | -<
-// : ulIconYOffs /    |                                |   |  ulVPad
-// :                  +--------------------------------+ --'
-// ulLine2YOffs
-//                       |<--->|   |<------->|  |<->|
-//                          |           |         |
-//                    ulIconSize  ulTextWidth  ulBarWidth
-
-static ULONG		ulHPad = 10;
-static ULONG		ulVPad = 5;
-static ULONG		ulIconSize = 40;
-static ULONG		ulIconYOffs = 0;
-static ULONG		ulTextWidth = 120;
-static ULONG		ulTextLPad = 10;
-static ULONG		ulTextRPad = 10;
-static ULONG		ulItemHeight = 40;
-static ULONG		ulLine1YOffs = 20;
-static ULONG		ulLine2YOffs = 0;
-static ULONG		ulBarWidth = 20;
-static ULONG		ulLineHeight = 8;
+static ULONG		ulHPad;
+static ULONG		ulVPad;
+static ULONG		ulIconSize;
+static ULONG		ulIconAreaCX;
+static ULONG		ulLineHeight;
+static ULONG		ulBarTextWidth;
+static ULONG		ulBarWidth;
+static ULONG		ulBarHeight;
 
 // Data source information.
 static DSINFO stDSInfo = {
-  sizeof(DSINFO),			// Size of this data structure.
-  "~CPU",				// Menu item title.
-  0,					// Number of "sort-by" strings.
-  NULL,					// "Sort-by" strings.
-  0,					// Flags DS_FL_*
-  70,					// Items horisontal space, %Em
-  70					// Items vertical space, %Em
+  sizeof(DSINFO),		// Size of this data structure.
+  (PSZ)IDS_DS_TITLE,		// Data source module's title (resource string
+                    		// ID, see flag DS_FL_RES_MENU_TITLE).
+  0,				// Number of "sort-by" strings.
+  NULL,				// "Sort-by" strings.
+  DS_FL_RES_MENU_TITLE,		// Flags DS_FL_*
+  70,				// Items horisontal space, %Em
+  70,				// Items vertical space, %Em
+  20801				// Help main panel index (see cpu.ipf).
 };
 
 // Pointers to helper routines.
@@ -137,6 +121,7 @@ PHutil3DFrame			putil3DFrame;
 PHutilBox			putilBox;
 PHutilMixRGB			putilMixRGB;
 PHutilLoadInsertStr		putilLoadInsertStr;
+PHutilQueryProgPath		putilQueryProgPath;
 PHupdateLock			pupdateLock;
 PHupdateUnlock			pupdateUnlock;
 PHstrFromSec			pstrFromSec;
@@ -146,7 +131,7 @@ PHstrLoad2			pstrLoad2;
 PHctrlStaticToColorRect		pctrlStaticToColorRect;
 PHctrlDlgCenterOwner		pctrlDlgCenterOwner;
 PHctrlQueryText			pctrlQueryText;
-
+PHhelpShow			phelpShow;
 
 // BOOL cpuHaveCPUID()
 // Return TRUE if CPUID allowed. https://ru.wikipedia.org/wiki/CPUID
@@ -323,6 +308,8 @@ DSEXPORT PDSINFO APIENTRY dsInstall(HMODULE hMod, PSLINFO pSLInfo)
 
   // Store module handle of data source.
   hDSModule = hMod;
+  // Store anchor block handle.
+  hab = pSLInfo->hab;
 
   // Query pointers to helper routines.
 
@@ -345,6 +332,7 @@ DSEXPORT PDSINFO APIENTRY dsInstall(HMODULE hMod, PSLINFO pSLInfo)
   putilBox = (PHutilBox)pSLInfo->slQueryHelper( "utilBox" );
   putilMixRGB = (PHutilMixRGB)pSLInfo->slQueryHelper( "utilMixRGB" );
   putilLoadInsertStr = (PHutilLoadInsertStr)pSLInfo->slQueryHelper( "utilLoadInsertStr" );
+  putilQueryProgPath = (PHutilQueryProgPath)pSLInfo->slQueryHelper( "utilQueryProgPath" );
   pupdateLock = (PHupdateLock)pSLInfo->slQueryHelper( "updateLock" );
   pupdateUnlock = (PHupdateUnlock)pSLInfo->slQueryHelper( "updateUnlock" );
   pstrFromSec = (PHstrFromSec)pSLInfo->slQueryHelper( "strFromSec" );
@@ -354,6 +342,7 @@ DSEXPORT PDSINFO APIENTRY dsInstall(HMODULE hMod, PSLINFO pSLInfo)
   pctrlStaticToColorRect = (PHctrlStaticToColorRect)pSLInfo->slQueryHelper( "ctrlStaticToColorRect" );
   pctrlDlgCenterOwner = (PHctrlDlgCenterOwner)pSLInfo->slQueryHelper( "ctrlDlgCenterOwner" );
   pctrlQueryText = (PHctrlQueryText)pSLInfo->slQueryHelper( "ctrlQueryText" );
+  phelpShow = (PHhelpShow)pSLInfo->slQueryHelper( "helpShow" );
 
   putilGetEmSize = (PHutilGetEmSize)pSLInfo->slQueryHelper( "utilGetEmSize" );
   psizeEm = putilGetEmSize( hMod );
@@ -374,191 +363,173 @@ DSEXPORT BOOL APIENTRY dsInit()
   ULONG		ulIdx;
   CHAR		szBuf[128];
 
-  ptInit();
+  // ACPI initialization - load acpi32.dll and version check.
+  tzInit();
 
-  ulRC = DosLoadModule( NULL, 0, "DOSCALLS", &hDosCalls );
+  paCPUTemp = NULL;
+  cCPUTempMax = 0;
+  cCPUTemp = 0;
+
+  // Necessary initialization to obtain information about processors.
+  ulRC = DosPerfSysCall( CMD_KI_ENABLE, 0, 0, 0 );
   if ( ulRC != NO_ERROR )
   {
-    debug( "DosLoadModule(), rc = %u\n", ulRC );
+    debug( "DosPerfSysCall(CMD_KI_ENABLE), rc = %u\n", ulRC );
     return FALSE;
   }
 
-  DosQueryProcAddr( hDosCalls, 447, NULL, (PFN*)&pDosGetProcessorStatus );
-  DosQueryProcAddr( hDosCalls, 448, NULL, (PFN*)&pDosSetProcessorStatus );
-  do
+  // Request number of processors.
+  ulRC = DosPerfSysCall( CMD_PERF_INFO, 0, (ULONG)&cCPU, 0 );
+  if ( ulRC != NO_ERROR )
   {
-    // Prepare API (doscalls).
+    debug( "DosPerfSysCall(CMD_PERF_INFO), rc = %u\n", ulRC );
+    return FALSE;
+  }
 
-    ulRC = DosQueryProcAddr( hDosCalls, 976, NULL, (PFN*)&pDosPerfSysCall );
-    if ( ulRC != NO_ERROR )
+  // Array of counters for DosPerfSysCall() calls.
+  pCPUCounters = debugCAlloc( cCPU, sizeof(CPUCNT) );
+  if ( pCPUCounters == NULL )
+  {
+    debug( "Not enough memory" );
+    return FALSE;
+  }
+
+  // Allocate CPU records and additional record for interrupts.
+  pCPUList = debugCAlloc( cCPU, sizeof(CPU) );
+  if ( pCPUList == NULL )
+  {
+    debug( "Not enough memory" );
+    debugFree( pCPUCounters );
+    return FALSE;
+  }
+
+  // Graph initialization.
+
+  ulTimeWindow = piniReadULong( hDSModule, "TimeWindow",
+                                           DEF_TIMEWINDOW );
+  if ( ulTimeWindow < 60 || ulTimeWindow > (60*5) )
+    ulTimeWindow = DEF_TIMEWINDOW;
+
+  // pGrValParam is the array of parameters for every single graph.
+  pGrValParam = debugMAlloc( (cCPU + 1) * sizeof(GRVALPARAM) );
+  if ( pGrValParam == NULL )
+  {
+    debug( "Not enough memory" );
+    debugFree( pCPUCounters );
+    return FALSE;
+  }
+
+  // Fill CPU load graph paramethers list.
+  for( ulIdx = 0; ulIdx < cCPU; ulIdx++ )
+  {
+    pGrValParam[ulIdx].ulLineWidth = 2;
+    sprintf( &szBuf, "CPU%uColor", ulIdx );
+    pGrValParam[ulIdx].clrGraph =
+      piniReadULong( hDSModule, &szBuf,
+                                aulDefColors[ulIdx % DEF_COLORS] );
+  }
+  // Graph paramethers for graph of interrupts.
+  pGrValParam[cCPU].ulLineWidth = 2;
+  pGrValParam[cCPU].clrGraph =
+    piniReadULong( hDSModule, "IRQColor", DEF_IRQ_COLOR );
+  pGrValParam[cCPU].ulPlygonBright = 0;
+
+  stGrParam.cParamVal = cCPU + 1;
+  stGrParam.pParamVal = pGrValParam;
+  stGrParam.clrBackground =
+    piniReadULong( hDSModule, "GrBgColor", DEF_GRBGCOLOR );
+  stGrParam.clrBorder =
+    piniReadULong( hDSModule, "GrBorderColor", DEF_GRBORDERCOLOR );
+
+  // Graph "base object" initialization.
+  ulTime = ulTimeWindow * 1000;
+  if ( !pgrInit( &stGraph, ulTime / UPDATE_INTERVAL, ulTime, 0,
+                            1000 ) ) // max. 1000: 0..100% and tenths.
+  {
+    debug( "grInit() fail" );
+    debugFree( pCPUCounters );
+    debugFree( pCPUList );
+    return FALSE;
+  }
+
+  // Graph's values data storages of CPUs initialization.
+  for( ulIdx = 0; ulIdx < cCPU; ulIdx++ )
+    pgrInitVal( &stGraph, &pCPUList[ulIdx].stGrVal );
+
+  // Graph's values data storages of IRQ initialization.
+  pgrInitVal( &stGraph, &stGrIRQVal );
+
+  // Thermal Zone temperature.
+
+  ulTemperature = (ULONG)(-1);
+  pszTZPathname = NULL;
+  // Set measurement units.
+  ulPTMU = piniReadULong( hDSModule, "TMU", TZ_MU_CELSIUS );
+
+  // Set pathname for ACPI table
+
+  // Load pathname from the ini-file.
+  if ( piniReadStr( hDSModule, "TZPathname", &szBuf,
+                               sizeof(szBuf), NULL ) != 0 )
+  {
+    pszTZPathname = debugStrDup( &szBuf );
+
+    // Trying to query CPU temperature.
+    if ( tzQuery( &szBuf, ulPTMU, &ulTemperature ) != TZ_OK )
+      debug( "Can't get Thermal Zone t. with pathname from ini-file: %s",
+             &szBuf );
+  }
+
+  if ( ulTemperature == (ULONG)(-1) )
+  {
+    // Try pathnames from resource.
+
+    for( ulIdx = IDS_PATHNAME_FIRST_ID; ; ulIdx++ ) 
     {
-      debug( "DosQueryProcAddr(), rc = %u\n", ulRC );
-      break;
-    }
+      if ( pstrLoad( hDSModule, ulIdx, sizeof(szBuf), &szBuf ) == 0
+           || szBuf[0] != '\\' )
+        break;
 
-    ulRC = pDosPerfSysCall( CMD_KI_ENABLE, 0, 0, 0 );
-    if ( ulRC != NO_ERROR )
-    {
-      debug( "pDosPerfSysCall(CMD_KI_ENABLE), rc = %u\n", ulRC );
-      break;
-    }
+      if ( tzQuery( &szBuf, ulPTMU, &ulTemperature ) != TZ_OK )
+        continue;
 
-    // Request number of processors.
-    ulRC = pDosPerfSysCall( CMD_PERF_INFO, 0, (ULONG)&cCPU, 0 );
-    if ( ulRC != NO_ERROR )
-    {
-      debug( "pDosPerfSysCall(CMD_PERF_INFO), rc = %u\n", ulRC );
-      break;
-    }
-
-    // Array of counters for DosPerfSysCall() calls.
-    pCPUCounters = debugCAlloc( cCPU, sizeof(CPUCNT) );
-    if ( pCPUCounters == NULL )
-    {
-      debug( "Not enough memory" );
-      break;
-    }
-
-    // Allocate CPU records and additional record for interrupts.
-
-    pCPUList = debugCAlloc( cCPU, sizeof(CPU) );
-    if ( pCPUList == NULL )
-    {
-      debug( "Not enough memory" );
-      debugFree( pCPUCounters );
-      break;
-    }
-
-    // Graph initialization.
-
-    ulTimeWindow = piniReadULong( hDSModule, "TimeWindow",
-                                             DEF_TIMEWINDOW );
-    if ( ulTimeWindow < 60 || ulTimeWindow > (60*5) )
-      ulTimeWindow = DEF_TIMEWINDOW;
-
-    // pGrValParam is the array of parameters for every single graph.
-    pGrValParam = debugMAlloc( (cCPU + 1) * sizeof(GRVALPARAM) );
-    if ( pGrValParam == NULL )
-    {
-      debug( "Not enough memory" );
-      debugFree( pCPUCounters );
-      break;
-    }
-
-    // Fill CPU load graph paramethers list.
-    for( ulIdx = 0; ulIdx < cCPU; ulIdx++ )
-    {
-      pGrValParam[ulIdx].ulLineWidth = 2;
-      sprintf( &szBuf, "CPU%uColor", ulIdx );
-      pGrValParam[ulIdx].clrGraph =
-        piniReadULong( hDSModule, &szBuf,
-                                  aulDefColors[ulIdx % DEF_COLORS] );
-    }
-    // Graph paramethers for graph of interrupts.
-    pGrValParam[cCPU].ulLineWidth = 2;
-    pGrValParam[cCPU].clrGraph =
-      piniReadULong( hDSModule, "IRQColor", DEF_IRQ_COLOR );
-
-    stGrParam.cParamVal = cCPU + 1;
-    stGrParam.pParamVal = pGrValParam;
-    stGrParam.clrBackground =
-      piniReadULong( hDSModule, "GrBgColor", DEF_GRBGCOLOR );
-    stGrParam.clrBorder =
-      piniReadULong( hDSModule, "GrBorderColor", DEF_GRBORDERCOLOR );
-
-    // Graph "base object" initialization.
-    ulTime = ulTimeWindow * 1000;
-    if ( !pgrInit( &stGraph, ulTime / UPDATE_INTERVAL, ulTime, 0,
-                              1000 ) ) // max. 1000: 0..100% and tenths.
-    {
-      debug( "grInit() fail" );
-      debugFree( pCPUCounters );
-      debugFree( pCPUList );
-      return FALSE;
-    }
-
-    // Graph's values data storages of CPUs initialization.
-    for( ulIdx = 0; ulIdx < cCPU; ulIdx++ )
-      pgrInitVal( &stGraph, &pCPUList[ulIdx].stGrVal );
-
-    // Graph's values data storages of IRQ initialization.
-    pgrInitVal( &stGraph, &stGrIRQVal );
-
-    // ’emperature.
-
-    ul’emperature = (ULONG)(-1);
-    pszTZPathname = NULL;
-    // Set measurement units.
-    ulPTMU = piniReadULong( hDSModule, "TMU", PT_MU_CELSIUS );
-
-    // Set pathname for ACPI table
-
-    // Load pathname from the ini-file.
-    if ( piniReadStr( hDSModule, "TZPathname", &szBuf,
-                                 sizeof(szBuf), NULL ) != 0 )
-    {
+      // CPU t successfully determined. Use found pathname.
+      if ( pszTZPathname != NULL )
+        debugFree( pszTZPathname );
       pszTZPathname = debugStrDup( &szBuf );
 
-      // Trying to query CPU temperature.
-      if ( ptQuery( &szBuf, ulPTMU, &ul’emperature ) != PT_OK )
-        debug( "Can't get CPU t with pathname from ini-file: %s", &szBuf );
+      debug( "CPU t successfully determined with default pathname: %s",
+             &szBuf );
+      break;
     }
-
-    if ( ul’emperature == (ULONG)(-1) )
-    {
-      // Try pathnames from resource.
-
-      for( ulIdx = IDS_PATHNAME_FIRST_ID; ; ulIdx++ ) 
-      {
-        if ( pstrLoad( hDSModule, ulIdx, sizeof(szBuf), &szBuf ) == 0
-             || szBuf[0] != '\\' )
-          break;
-
-        if ( ptQuery( &szBuf, ulPTMU, &ul’emperature ) != PT_OK )
-          continue;
-
-        // CPU t successfully determined. Use found pathname.
-        if ( pszTZPathname != NULL )
-          debugFree( pszTZPathname );
-        pszTZPathname = debugStrDup( &szBuf );
-
-        debug( "CPU t successfully determined with default pathname: %s",
-               &szBuf );
-        break;
-      }
-    }
-
-    // CPU brand string.
-
-    if ( cpuHaveCPUID() )
-    {
-      pszBrandStr = cpuQueryBrandString();
-
-      if ( pszBrandStr[0] == '\0' )         // Brand string is not available -
-        pszBrandStr = cpuQueryVendorName(); // use vendor name.
-    }
-
-    // Show real frequency flag.
-    fRealFreq = (BOOL)piniReadULong( hDSModule, "realFreq",
-                                     (ULONG)DEF_REALFREQ );
-    // Show separate rates user/IRQ loads.
-    ulSeparateRates = piniReadULong( hDSModule, "separateRates",
-                                     DEF_SEPARATERATES );
-
-    // Load CPU icons.
-    hIcon = WinLoadPointer( HWND_DESKTOP, hDSModule, ID_ICON_CPU );
-    hIconOff = WinLoadPointer( HWND_DESKTOP, hDSModule, ID_ICON_CPUOFF );
-
-    // Initial query counters.
-    DosQuerySysInfo( QSV_MS_COUNT, QSV_MS_COUNT, &ulTime, sizeof(ULONG) );
-    dsUpdate( ulTime );
-
-    return TRUE;
   }
-  while( FALSE );
 
-  DosFreeModule( hDosCalls );
-  return FALSE;
+  // CPU brand string.
+
+  if ( cpuHaveCPUID() )
+  {
+    pszBrandStr = cpuQueryBrandString();
+
+    if ( pszBrandStr[0] == '\0' )         // Brand string is not available -
+      pszBrandStr = cpuQueryVendorName(); // use vendor name.
+  }
+
+  // Show real frequency flag.
+  fRealFreq = (BOOL)piniReadULong( hDSModule, "realFreq",
+                                   (ULONG)DEF_REALFREQ );
+  // Show separate rates user/IRQ loads.
+  ulSeparateRates = piniReadULong( hDSModule, "separateRates",
+                                   DEF_SEPARATERATES );
+
+  // Load CPU icons.
+  hIcon = WinLoadPointer( HWND_DESKTOP, hDSModule, ID_ICON_CPU );
+  hIconOff = WinLoadPointer( HWND_DESKTOP, hDSModule, ID_ICON_CPUOFF );
+
+  // Initial query counters.
+  DosQuerySysInfo( QSV_MS_COUNT, QSV_MS_COUNT, &ulTime, sizeof(ULONG) );
+  dsUpdate( ulTime );
+
+  return TRUE;
 }
 
 DSEXPORT VOID APIENTRY dsDone()
@@ -578,8 +549,9 @@ DSEXPORT VOID APIENTRY dsDone()
   debugFree( pCPUCounters );
   debugFree( pCPUList );
   debugFree( pGrValParam );
-  DosFreeModule( hDosCalls );
-  ptDone();
+  if ( paCPUTemp != NULL )
+    debugFree( paCPUTemp );
+  tzDone();
 
   WinDestroyPointer( hIcon );
   WinDestroyPointer( hIconOff );
@@ -605,16 +577,40 @@ DSEXPORT ULONG APIENTRY dsUpdate(ULONG ulTime)
   ULLONG	ullDeltaBusy;
   ULLONG	ullDeltaIntr;
 
-  ulRC = pDosPerfSysCall( CMD_KI_RDCNT, (ULONG)pCPUCounters, 0, 0 );
-  if ( ulRC != NO_ERROR )
-  {
-    debug( "pDosPerfSysCall(CMD_KI_RDCNT), rc = %u\n", ulRC );
-    return DS_UPD_NONE;
-  }
-
   fInterval = pgrGetTimestamp( &stGraph, &ulPrevTime );
   if ( fInterval & ( (ulTime - ulPrevTime) < 100 ) )
     return DS_UPD_NONE;
+
+  // Query CPU temperatures.
+  while( TRUE )
+  {
+    ulRC = cputempQuery( cCPUTempMax, paCPUTemp, &cCPUTemp );
+    if ( ulRC == CPUTEMP_OK )
+      break;
+
+    if ( ulRC == CPUTEMP_OVERFLOW )
+    {
+      cCPUTempMax = cCPUTemp;
+      if ( paCPUTemp != NULL )
+        debugFree( paCPUTemp );
+      paCPUTemp = debugMAlloc( sizeof(CPUTEMP) * cCPUTempMax );
+      if ( paCPUTemp != NULL )
+        continue;
+
+      debug( "Not enough memory" );
+    }
+
+    cCPUTempMax = 0;
+    cCPUTemp = 0;
+    break;
+  }
+
+  ulRC = DosPerfSysCall( CMD_KI_RDCNT, (ULONG)pCPUCounters, 0, 0 );
+  if ( ulRC != NO_ERROR )
+  {
+    debug( "DosPerfSysCall(CMD_KI_RDCNT), rc = %u\n", ulRC );
+    return DS_UPD_NONE;
+  }
 
   // fInterval is FALSE - this is first call dsUpdate().
   pgrNewTimestamp( &stGraph, ulTime );
@@ -631,15 +627,25 @@ DSEXPORT ULONG APIENTRY dsUpdate(ULONG ulTime)
       ullDeltaBusy = pCPUCounters[ulIdx].ullBusy - pCPUList[ulIdx].ullBusy;
       ullDeltaIntr = pCPUCounters[ulIdx].ullIntr - pCPUList[ulIdx].ullIntr;
 
-      // We measure the load in the range from 0 to 1000 to later convert the
-      // values in tenths of a percent.
+      if ( ullDeltaTime == 0 )
+      {
+        // WTF?! Sometimes ullDeltaTime is 0 (on IBM kernel ?) -=8( )
+        debugCP( "ullDeltaTime is ZERO !" );
+        pCPUList[ulIdx].ulLoadIntr = 0;
+        pgrSetValue( &stGraph, &pCPUList[ulIdx].stGrVal, 0 );
+      }
+      else
+      {
+        // We measure the load in the range from 0 to 1000 to later convert the
+        // values in tenths of a percent.
 
-      // Interrupt load value.
-      pCPUList[ulIdx].ulLoadIntr = (ULONG)(ullDeltaIntr * 1000 / ullDeltaTime);
+        // Interrupt load value.
+        pCPUList[ulIdx].ulLoadIntr = (ULONG)(ullDeltaIntr * 1000 / ullDeltaTime);
 
-      // Store load (busy+interrupt) value to storage.
-      pgrSetValue( &stGraph, &pCPUList[ulIdx].stGrVal,
-                (ULONG)((ullDeltaBusy + ullDeltaIntr) * 1000 / ullDeltaTime) );
+        // Store load (busy+interrupt) value to storage.
+        pgrSetValue( &stGraph, &pCPUList[ulIdx].stGrVal,
+                  (ULONG)((ullDeltaBusy + ullDeltaIntr) * 1000 / ullDeltaTime) );
+      }
 
       // Store load interrupt value from CPU0 to IRQ's data storage.
       if ( ulIdx == 0 )
@@ -656,16 +662,15 @@ DSEXPORT ULONG APIENTRY dsUpdate(ULONG ulTime)
     pCPUList[ulIdx].ullBusy = pCPUCounters[ulIdx].ullBusy;
     pCPUList[ulIdx].ullIntr = pCPUCounters[ulIdx].ullIntr;
 
-    pCPUList[ulIdx].fStatus = 
-      (pDosGetProcessorStatus != NULL) &&
-      (pDosGetProcessorStatus( ulIdx+1, &pCPUList[ulIdx].fOnline ) == NO_ERROR);
+    if ( DosGetProcessorStatus( ulIdx+1, &pCPUList[ulIdx].fOnline ) != NO_ERROR )
+      pCPUList[ulIdx].fOnline = TRUE;
   }
 
-  // Query CPU temperature only if a previous attempt was successful.
-
-  if ( ul’emperature != (ULONG)(-1) &&
-       ptQuery( pszTZPathname, ulPTMU, &ul’emperature ) != PT_OK )
-    ul’emperature = (ULONG)(-1);
+  // Query Thermal Zone temperature via ACPI only if a previous attempt was
+  // successful.
+  if ( ulTemperature != (ULONG)(-1) &&
+       tzQuery( pszTZPathname, ulPTMU, &ulTemperature ) != TZ_OK )
+    ulTemperature = (ULONG)(-1);
 
   if ( ulLastSeparateRates != ulSeparateRates )
   {
@@ -685,43 +690,45 @@ DSEXPORT VOID APIENTRY dsSetWndStart(HPS hps, PSIZEL pSize)
   PCHAR		pcBuf = &szBuf;
   ULONG		cbBuf = sizeof(szBuf);
 
+  ulHPad = (psizeEm->cx >> 1) + (psizeEm->cx >> 3);
+  ulVPad = (psizeEm->cy >> 1) + (psizeEm->cy >> 2);
+
   ulIconSize = WinQuerySysValue( HWND_DESKTOP, SV_CXICON );
 
-  pstrLoad2( hDSModule, IDS_LOAD, &cbBuf, &pcBuf );
-  _snprintf( pcBuf, cbBuf, " 99.9%%" );
-  putilGetTextSize( hps, strlen( &szBuf ), &szBuf, &sizeText );
-  ulTextWidth = sizeText.cx;
+  cbBuf = pstrLoad( hDSModule, IDS_CPU, sizeof(szBuf), &szBuf );
+  cbBuf += _snprintf( &szBuf[cbBuf], sizeof(szBuf) - cbBuf, " %u", cCPU );
+  putilGetTextSize( hps, cbBuf, &szBuf, &sizeText );
+  ulIconAreaCX = max( sizeText.cx, ulIconSize ) + ( psizeEm->cx >> 1 );
+
+  cbBuf = pstrLoad( hDSModule, IDS_USER, sizeof( szBuf ), pcBuf );
+  putilGetTextSize( hps, cbBuf, &szBuf, &sizeText );
+  ulBarTextWidth = sizeText.cx;
+
+  cbBuf = pstrLoad( hDSModule, IDS_IRQ, sizeof( szBuf ), pcBuf );
+  putilGetTextSize( hps, cbBuf, &szBuf, &sizeText );
+  if ( ulBarTextWidth < sizeText.cx )
+    ulBarTextWidth = sizeText.cx;
+
+  cbBuf = pstrLoad( hDSModule, IDS_TEMP, sizeof( szBuf ), pcBuf );
+  putilGetTextSize( hps, cbBuf, &szBuf, &sizeText );
+  if ( ulBarTextWidth < sizeText.cx )
+    ulBarTextWidth = sizeText.cx;
+
+  putilGetTextSize( hps, sprintf( &szBuf, " 99.9%%" ), &szBuf, &sizeText );
+  if ( ulBarTextWidth < sizeText.cx )
+    ulBarTextWidth = sizeText.cx;
+
+  ulBarTextWidth += psizeEm->cx >> 1;
+  ulBarWidth = psizeEm->cx;
   ulLineHeight = sizeText.cy;
+  ulBarHeight = ulIconSize + ulLineHeight;
 
-  ulHPad = (psizeEm->cx >> 1) + (psizeEm->cx >> 3);
-  ulVPad = psizeEm->cy;
-  ulBarWidth = (ulHPad << 1) - (ulHPad >> 1);
-  ulTextLPad = psizeEm->cx >> 1;
-  ulTextRPad = ulTextLPad;
+  pSize->cx = 2 * ulHPad + ulIconAreaCX + 2 * ulBarTextWidth;
+  pSize->cy = 2 * ulVPad + ulBarHeight + 2 * ulLineHeight;
 
-  // Additional 4 pixels in height for bar drawing: 1px frame +
-  // 1px space frame<->lines - for top and bottom
-  ulItemHeight = max( sizeText.cy * 3, ulIconSize ) + 4;
-  ulIconYOffs = ( ulItemHeight - ulIconSize ) >> 1;
-  ulLine2YOffs = ( (ulItemHeight >> 1) - sizeText.cy ) >> 1;
-  ulLine1YOffs = ulLine2YOffs + ulItemHeight >> 1;
-
-  pSize->cx = 2 * ulHPad + ulIconSize + ulTextLPad + ulTextWidth +
-              ulTextRPad + ulBarWidth;
-  pSize->cy = 2 * ulVPad + ulItemHeight;
-}
-
-DSEXPORT VOID APIENTRY dsSetWnd(ULONG ulIndex, HWND hwnd, HPS hps)
-{
-  SWP		swp;
-
-  if ( ( ulSeparateRates == CPU_SR_ALL ) ||
-       ( ( ulSeparateRates == CPU_SR_CPU0 ) && ( ulIndex == 0 ) ) )
-  {
-    WinQueryWindowPos( hwnd, &swp );
-    WinSetWindowPos( hwnd, HWND_TOP, 0, 0, swp.cx, swp.cy + (2 * ulLineHeight),
-                     SWP_SIZE );
-  }
+  // Space for core temperature load-bar if this value is available.
+  if ( cCPUTemp != 0 )
+    pSize->cx += ulBarTextWidth;
 }
 
 
@@ -733,7 +740,6 @@ static VOID _loadBar(HPS hps, PRECTL pRect, ULONG ulMax, ULONG ulVal,
   ULONG		ulUnitCY;
   ULONG		ulIdx;
   LONG		lColor = BARCLR_1;
-  ULONG		ulUnits = ( BAR_LINES * ulVal ) / ulMax;
   POINTL	pt;
   SIZEL		sizeText;
 
@@ -768,15 +774,20 @@ static VOID _loadBar(HPS hps, PRECTL pRect, ULONG ulMax, ULONG ulVal,
   rect.yBottom += 2;
   rect.yTop = rect.yBottom + (ulUnitCY >> 1);
 
-  for( ulIdx = 0; ulIdx < ulUnits; ulIdx++ )
+  if ( ulMax != 0 )
   {
-    if ( ulIdx == (BAR_LINES / 2) )
-      lColor = BARCLR_2;
-    else if ( ulIdx == BAR_LINES - (BAR_LINES / 4) )
-      lColor = BARCLR_3;
+    for( ulIdx = 0;
+         ulIdx < ( (ulVal > ulMax) ? BAR_LINES : ((BAR_LINES * ulVal) / ulMax) );
+         ulIdx++ )
+    {
+      if ( ulIdx == (BAR_LINES / 2) )
+        lColor = BARCLR_2;
+      else if ( ulIdx == BAR_LINES - (BAR_LINES / 4) )
+        lColor = BARCLR_3;
 
-    putilBox( hps, &rect, lColor );
-    WinOffsetRect( NULLHANDLE, &rect, 0, ulUnitCY );
+      putilBox( hps, &rect, lColor );
+      WinOffsetRect( NULLHANDLE, &rect, 0, ulUnitCY );
+    }
   }
 }
 
@@ -786,105 +797,102 @@ DSEXPORT VOID APIENTRY dsPaintItem(ULONG ulIndex, HPS hps, PSIZEL psizeWnd)
   POINTL	pt;
   CHAR		szBuf[128];
   ULONG		cbBuf;
-  RECTL		rect;
   ULONG		ulLoad = 0;
   BOOL		fInterval = pgrGetValue( &stGraph, &pCPU->stGrVal, &ulLoad );
+  ULONG		ulMaxLoad;
+  RECTL		rect;
   CHAR		szCaption[32];
   ULONG		cbCaption = 0;
 
   // Icon
-  WinDrawPointer( hps, ulHPad, ulVPad + ulIconYOffs,
+  WinDrawPointer( hps, ulHPad, ulVPad + (ulLineHeight >> 1),
                   pCPU->fOnline ? hIcon : hIconOff, DP_NORMAL );
 
+  // String "CPU: N"
   cbBuf = pstrLoad( hDSModule, IDS_CPU, sizeof(szBuf), &szBuf );
   cbBuf += _snprintf( &szBuf[cbBuf], sizeof(szBuf) - cbBuf, " %u", ulIndex );
+  pt.x = ulHPad;
+  pt.y = ulVPad + ulIconSize + ulLineHeight;
+  GpiCharStringAt( hps, &pt, cbBuf, &szBuf );
 
-  if ( ( ulSeparateRates == CPU_SR_ALL ) ||
-       ( ( ulSeparateRates == CPU_SR_CPU0 ) && ( ulIndex == 0 ) ) )
+  // "User" CPU load.
+
+  if ( fInterval )
+    ulLoad -= pCPU->ulLoadIntr;
+
+  if ( fInterval )
   {
-    ULONG	ulBarsPlaceX = ulHPad + ulIconSize;
-    ULONG	ulBarHStep = ( psizeWnd->cx - ulHPad - ulIconSize ) / 3;
+    ldiv_t	stLoad = ldiv( ulLoad, 10 );
 
-    // String "CPU: N"
-    pt.x = ulHPad;
-    pt.y = ulVPad + ulIconYOffs + ulIconSize + ulLineHeight;
-    GpiCharStringAt( hps, &pt, cbBuf, &szBuf );
-
-    if ( fInterval )
-      ulLoad -= pCPU->ulLoadIntr;
-   
-    rect.xLeft = ulBarsPlaceX + ulBarHStep - (ulBarWidth >> 1);
-    rect.yBottom = ulVPad + ulLineHeight;
-    rect.xRight = rect.xLeft + ulBarWidth;
-    rect.yTop = rect.yBottom + ulItemHeight;
-
-    if ( fInterval )
-    {
-      ldiv_t	stLoad = ldiv( ulLoad, 10 );
-
-      cbBuf = sprintf( &szBuf, "%u.%u%%", stLoad.quot, stLoad.rem );
-    }
-    else
-      cbBuf = 0;
-
-    cbCaption = pstrLoad( hDSModule, IDS_USER, sizeof(szCaption), &szCaption );
-    _loadBar( hps, &rect, 1000, ulLoad, cbCaption, szCaption, cbBuf, &szBuf );
-
-    rect.xLeft = ulBarsPlaceX + (ulBarHStep << 1);// - (ulBarWidth >> 1);
-    rect.xRight = rect.xLeft + ulBarWidth;
-
-    if ( fInterval )
-    {
-      ldiv_t	stLoad = ldiv( pCPU->ulLoadIntr, 10 );
-
-      cbBuf = sprintf( &szBuf, "%u.%u%%", stLoad.quot, stLoad.rem );
-    }
-    else
-      cbBuf = 0;
-
-    ulLoad = pCPU->ulLoadIntr;
-    cbCaption = pstrLoad( hDSModule, IDS_IRQ, sizeof(szCaption), &szCaption );
+    cbBuf = sprintf( &szBuf, "%u.%u%%", stLoad.quot, stLoad.rem );
   }
   else
+    cbBuf = 0;
+
+  cbCaption = pstrLoad( hDSModule, IDS_USER, sizeof(szCaption), &szCaption );
+
+  rect.xLeft = ulHPad + ulIconAreaCX + (ulBarTextWidth / 2) - (ulBarWidth / 2);
+  rect.yBottom = ulVPad + ulLineHeight;
+  rect.xRight = rect.xLeft + ulBarWidth;
+  rect.yTop = rect.yBottom + ulBarHeight;
+  _loadBar( hps, &rect, 1000, ulLoad, cbCaption, szCaption, cbBuf, &szBuf );
+
+  // "IRQ" CPU load.
+
+  if ( fInterval )
   {
-    LONG		lBackColor = GpiQueryBackColor( hps );
+    ldiv_t	stLoad = ldiv( pCPU->ulLoadIntr, 10 );
 
-    // String "CPU: N"
-    pt.x = ulHPad + ulIconSize + ulTextLPad;
-    pt.y = ulVPad + ulLine1YOffs;
-    GpiCharStringAt( hps, &pt, cbBuf, &szBuf );
+    cbBuf = sprintf( &szBuf, "%u.%u%%", stLoad.quot, stLoad.rem );
+  }
+  else
+    cbBuf = 0;
 
-    // Bar's rectangle
-    rect.xLeft = ulHPad + ulIconSize + ulTextLPad + ulTextWidth + ulTextRPad;
-    rect.yBottom = ulVPad;
-    rect.xRight = rect.xLeft + ulBarWidth;
-    rect.yTop = rect.yBottom + ulItemHeight;
+  cbCaption = pstrLoad( hDSModule, IDS_IRQ, sizeof(szCaption), &szCaption );
 
-    if ( fInterval )
+  WinOffsetRect( hab, &rect, ulBarTextWidth, 0 );
+  _loadBar( hps, &rect, 1000, pCPU->ulLoadIntr, cbCaption, szCaption, cbBuf,
+            &szBuf );
+
+  // Core temperature.
+
+  {
+    ULONG	ulIdx;
+    PCPUTEMP	pCPUTemp = NULL;
+
+    // Search CPUTEMP record for processor.
+    for( ulIdx = 0; ulIdx < cCPUTemp; ulIdx++ )
     {
-      ldiv_t	stLoad = ldiv( ulLoad, 10 );
-      ULONG	ulUnits = ulLoad / 100;
- 
-      if ( stLoad.rem > 5 )
-        ulUnits++;
-
-      // String "Load: NN.N"
-      pt.y = ulVPad + ulLine2YOffs;
-
-      cbBuf = pstrLoad( hDSModule, IDS_LOAD, sizeof(szBuf), &szBuf );
-      cbBuf += _snprintf( &szBuf[cbBuf], sizeof(szBuf) - cbBuf, " %u.%u%%",
-                          stLoad.quot, stLoad.rem );
-
-      if ( !pCPU->fOnline )
-        GpiSetColor( hps, putilMixRGB( GpiQueryColor( hps ), lBackColor, 100 ) );
-
-      GpiCharStringAt( hps, &pt, cbBuf, &szBuf );
+      if ( paCPUTemp[ulIdx].ulId == ulIndex )
+      {
+        pCPUTemp = &paCPUTemp[ulIndex];
+        break;
+      }
     }
 
-    cbBuf = 0;
+    if ( pCPUTemp == NULL || pCPUTemp->ulCode != CPU_OK )
+    {
+      // Temperature was not detected (processor OFFLINE or error).
+      ulLoad = 0;
+      ulMaxLoad = 0;
+      cbBuf = 0;
+    }
+    else
+    {
+      ulLoad = pCPUTemp->ulCurTemp;
+      ulMaxLoad = pCPUTemp->ulMaxTemp;
+
+      if ( ulPTMU == TZ_MU_FAHRENHEIT )
+        cbBuf = sprintf( &szBuf, "%u øF", ( 9 * ulLoad / 5 + 32 ) );
+      else
+        cbBuf = sprintf( &szBuf, "%u øC", ulLoad );
+    }
   }
 
-  _loadBar( hps, &rect, 1000, ulLoad, cbCaption, szCaption, cbBuf, &szBuf );
+  cbCaption = pstrLoad( hDSModule, IDS_TEMP, sizeof(szCaption), &szCaption );
+
+  WinOffsetRect( hab, &rect, ulBarTextWidth, 0 );
+  _loadBar( hps, &rect, ulMaxLoad, ulLoad, cbCaption, szCaption, cbBuf, &szBuf );
 }
 
 DSEXPORT VOID APIENTRY dsPaintDetails(HPS hps, PSIZEL psizeWnd)
@@ -919,10 +927,10 @@ DSEXPORT VOID APIENTRY dsPaintDetails(HPS hps, PSIZEL psizeWnd)
 
   szBuf[0] = '\0';
 
-  if ( ul’emperature != ((ULONG)(-1)) )
+  if ( ulTemperature != ((ULONG)(-1)) )
   {
-    ldiv_t	stT = ldiv( ul’emperature, 10 );
-    CHAR	cMU = ulPTMU == PT_MU_CELSIUS ? 'C' : 'F';
+    ldiv_t	stT = ldiv( ulTemperature, 10 );
+    CHAR	cMU = ulPTMU == TZ_MU_CELSIUS ? 'C' : 'F';
 
     if ( stT.rem == 0 )
       pcBuf += _snprintf( &szBuf, sizeof(szBuf), " %u ø%c", stT.quot, cMU );

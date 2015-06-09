@@ -98,7 +98,7 @@ VOID utilBox(HPS hps, PRECTL pRect, LONG lColor)
   GpiSetColor( hps, lSaveColor );
 }
 
-BOOL utilWriteResStr(HPS hps, PPOINTL pptPos, HMODULE hMod, ULONG ulId,
+BOOL utilWriteResStr(HPS hps, HMODULE hMod, ULONG ulId,
                      ULONG cVal, PSZ *ppszVal)
 {
   CHAR		szTemp[255];
@@ -125,7 +125,15 @@ BOOL utilWriteResStr(HPS hps, PPOINTL pptPos, HMODULE hMod, ULONG ulId,
   else
     pszBuf = &szTemp;
 
-  return GpiCharStringAt( hps, pptPos, ulLen, pszBuf ) != GPI_ERROR;
+  return GpiCharString( hps, ulLen, pszBuf ) != GPI_ERROR;
+}
+
+BOOL utilWriteResStrAt(HPS hps, PPOINTL pptPos, HMODULE hMod, ULONG ulId,
+                       ULONG cVal, PSZ *ppszVal)
+{
+  GpiMove( hps, pptPos );
+
+  return utilWriteResStr( hps, hMod, ulId, cVal, ppszVal );
 }
 
 
@@ -423,9 +431,11 @@ ULONG utilLoadInsertStr(HMODULE hMod,		// module handle
   else
     ulLen = WinLoadMessage( hab, hMod, ulId, cbBuf, pcTemp );
 
-  ulRC = DosInsertMessage( ppszVal, cVal, pcTemp, ulLen, pcBuf, cbBuf, &ulLen );
+  ulRC = DosInsertMessage( ppszVal, cVal, pcTemp, ulLen, pcBuf, cbBuf - 1, &ulLen );
   if ( ulRC != NO_ERROR )
     debug( "DosInsertMessage(), rc = %u", ulRC );
+  else
+    pcBuf[ulLen] = '\0';
 
   if ( fHeapUsed )
     debugFree( pcTemp );
@@ -728,7 +738,60 @@ ULONG strLoad2(HMODULE hModule, ULONG ulStrId, PULONG pcbBuf, PCHAR *ppcBuf)
   return lLen;
 }
 
+ULONG strFromULL(PCHAR pcBuf, ULONG cbBuf, ULLONG ullVal)
+{
+  PCHAR		pCh;
+  ULONG		ulLen = 1;
+  LONG		cbStr = _snprintf( pcBuf, cbBuf, "%llu", ullVal );
 
+  if ( cbStr <= 0 )
+    return 0;
+  pCh = &pcBuf[cbStr];
+
+  cbStr += ( cbStr - 1 ) / 3;
+  if ( (cbStr + 1) >= cbBuf )
+    return 0;
+
+  while( TRUE )
+  {
+    pCh -= 3;
+    if ( pCh <= pcBuf )
+      break;
+
+    ulLen += 3;
+    memmove( pCh + 1, pCh, ulLen );
+    *pCh = ' ';
+    ulLen++;
+  }
+
+  return cbStr;
+}
+
+// VOID strRemoveMnemonic(ULONG cbBuf, PCHAR pcBuf, PSZ pszText)
+//
+// Copies to buffer pcBuf up to cbBuf-1 characters from pszText and ZERO
+// Character '~' will be removed.
+
+VOID strRemoveMnemonic(ULONG cbBuf, PCHAR pcBuf, PSZ pszText)
+{
+  PCHAR		pCh;
+
+  if ( pszText == NULL )
+  {
+    if ( cbBuf != 0 )
+      pcBuf[0] = '\0';
+    return;
+  }
+
+  strlcpy( pcBuf, pszText, cbBuf );
+  // Remove tilde character
+  pCh = strchr( pcBuf, '~' );
+  if ( pCh != NULL )
+    strcpy( pCh, &pCh[1] );
+}
+
+
+/*
 // Memory
 
 // PVOID utilMemAlloc(ULONG ulSize)
@@ -811,3 +874,4 @@ VOID utilMemFree(PVOID pMem)
   if ( ulRC != NO_ERROR )
     debug( "DosFreeMem(), rc = %u", ulRC );
 }
+*/

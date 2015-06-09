@@ -25,13 +25,15 @@ call SysFileDelete "sl.wpi"
 "set beginlibpath=%osdir%\install\WARPIN"
 
 "%osdir%\install\WARPIN\WIC.EXE sl -a " || ,
-"1 -c..\bin sl.exe " || ,
-"2 -c..\bin cpu.dll " || ,
+"1 License.txt readme.txt " || ,
+"1 -c..\bin sl.exe rdmsr.sys " || ,
+"2 -c..\bin cpu.dll cpu.hlp " || ,
 "3 -c..\bin drives.dll " || ,
 "4 -c..\bin net.dll " || ,
 "5 -c..\bin os4irq.dll " || ,
 "6 -c..\bin process.dll " || ,
-"7 -c..\bin cpuid.exe getver.exe rxgetver.dll rxgetver.cmd sysstate.exe " || ,
+"7 -c..\bin traffic.dll traffic.hlp " || ,
+"8 -c..\bin cpuid.exe getver.exe rxgetver.dll rxgetver.cmd sysstate.exe cputemp.exe " || ,
 "-s " || fileScriptOutput
 
 call SysFileDelete fileScriptOutput

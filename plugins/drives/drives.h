@@ -22,19 +22,21 @@
 
 // Strings
 
-#define IDS_FLD_LETTER		16
-#define IDS_FLD_TOTAL		17
-#define IDS_FLD_FREE		18
-#define IDS_FLD_FILESYSTEM	19
-#define IDS_FLD_LABEL		20
-#define IDS_BAR_CAPTION		21
-#define IDS_DTL_LETTER		22
-#define IDS_DTL_LABEL		23
-#define IDS_DTL_FILESYSTEM	24
-#define IDS_DTL_TOTAL		25
-#define IDS_DTL_FREE		26
-#define IDS_MI_OPEN		27
-#define IDS_MI_EJECT		28
+#define IDS_DS_TITLE		1
+#define IDS_FLD_LETTER		2
+#define IDS_FLD_TOTAL		3
+#define IDS_FLD_FREE		4
+#define IDS_FLD_FILESYSTEM	5
+#define IDS_FLD_LABEL		6
+#define IDS_BAR_CAPTION		7
+#define IDS_DTL_LETTER		8
+#define IDS_DTL_LABEL		9
+#define IDS_DTL_FILESYSTEM	10
+#define IDS_DTL_TOTAL		11
+#define IDS_DTL_FREE		12
+#define IDS_MI_OPEN		13
+#define IDS_MI_EJECT		14
+#define IDS_BOOT		15
 
 // Properties dialog
 

@@ -838,10 +838,33 @@ VOID itemsEnter(HWND hwnd)
   ulRC = _getSel( pCurrentDataSrc );
   DosReleaseMutexSem( hmtxUpdate );
 
-  if ( ulRC != DS_SEL_NONE && pCurrentDataSrc->fnEnter( hwnd ) != DS_UPD_NONE )
-  {
-    WinPostMsg( hwndMain, WM_SL_UPDATE_LIST,
-                MPFROMLONG( ulRC == DS_UPD_DATA ), 0 );
-    WinPostMsg( hwndMain, WM_SL_UPDATE_DETAILS, NULL, NULL );
-  }
+  if ( ulRC == DS_SEL_NONE )
+    return;
+
+  ulRC = pCurrentDataSrc->fnEnter( hwnd );
+  if ( ulRC == DS_UPD_NONE )
+    return;
+
+  WinPostMsg( hwndMain, WM_SL_UPDATE_LIST, MPFROMLONG(ulRC == DS_UPD_DATA), 0 );
+  WinPostMsg( hwndMain, WM_SL_UPDATE_DETAILS, NULL, NULL );
 }
+
+// BOOL itemsHelp(BOOL fShow)
+//
+// Checks and returns TRUE if help (main panel) for selected data source is
+// available. Shows help window with main panel from file <module>.hlp using
+// index from data soure's information record (DSINFO) if fShow is TRUE.
+
+BOOL itemsHelp(BOOL fShow)
+{
+  if ( pCurrentDataSrc == NULL || pCurrentDataSrc->hwndHelp == NULLHANDLE &&
+       pCurrentDataSrc->pDSInfo->ulHelpId == 0 )
+    return FALSE;
+
+  if ( fShow )
+    WinSendMsg( pCurrentDataSrc->hwndHelp, HM_DISPLAY_HELP,
+                MPFROMLONG( MAKELONG( pCurrentDataSrc->pDSInfo->ulHelpId, NULL ) ),
+                MPFROMSHORT( HM_RESOURCEID ) );
+  return TRUE;
+}
+

@@ -44,7 +44,7 @@ typedef struct _IOCTLDATA {
 #pragma pack()
 
 
-BOOL duDiskInfo(ULONG ulDrv, BOOL fChekFloppy, PDISKINFO pInfo)
+BOOL duDiskInfo(ULONG ulDrv, PDISKINFO pInfo)
 {
   ULONG			ulRC;
   ULONG			cbData;
@@ -176,10 +176,6 @@ BOOL duDiskInfo(ULONG ulDrv, BOOL fChekFloppy, PDISKINFO pInfo)
   else
     return FALSE; // no drive
 
-  if ( ( !fChekFloppy && pInfo->ulType == DI_TYPE_FLOPPY ) || !pInfo->fPresent )
-    return TRUE;
-
-
   // Query file system.
 
   cbData = sizeof(abBuf);
@@ -195,7 +191,6 @@ BOOL duDiskInfo(ULONG ulDrv, BOOL fChekFloppy, PDISKINFO pInfo)
     memcpy( &pInfo->szFSDName, pBuf->szName+pBuf->cbName+1, pBuf->cbFSDName+1 );
   }
 
-
   // Query label.
 
   // for DosQueryFSInfo() - A: is 1, B: is 2... 
@@ -204,7 +199,7 @@ BOOL duDiskInfo(ULONG ulDrv, BOOL fChekFloppy, PDISKINFO pInfo)
   ulRC = DosQueryFSInfo( ulDrv, FSIL_VOLSER, &stFSInfo, sizeof(FSINFO) );
   if ( ulRC != NO_ERROR )
   {
-    debug( "DosQueryFSInfo(), rc = %u\n", ulRC );
+    debug( "DosQueryFSInfo(%u,,,), rc = %u\n", ulDrv, ulRC );
   }
   else
   {
@@ -215,7 +210,6 @@ BOOL duDiskInfo(ULONG ulDrv, BOOL fChekFloppy, PDISKINFO pInfo)
 //    pInfo->cbLabel = stFSInfo.vol.cch;
     pInfo->cbLabel = strlen( &stFSInfo.vol.szVolLabel );
   }
-
 
   // Query size.
 

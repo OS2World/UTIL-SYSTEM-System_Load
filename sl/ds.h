@@ -55,8 +55,10 @@ typedef VOID (*PHgrDraw)(PGRAPH pGraph, HPS hps, PRECTL prclGraph, ULONG cGrVal,
 typedef BOOL (*PHutilGetTextSize)(HPS hps, ULONG cbText, PSZ pszText, PSIZEL pSize);
 typedef VOID (*PHutil3DFrame)(HPS hps, PRECTL pRect, LONG lLTColor, LONG lRBColor);
 typedef VOID (*PHutilBox)(HPS hps, PRECTL pRect, LONG lColor);
-typedef BOOL (*PHutilWriteResStr)(HPS hps, PPOINTL pptPos, HMODULE hMod, ULONG ulId,
+typedef BOOL (*PHutilWriteResStr)(HPS hps, HMODULE hMod, ULONG ulId,
                                   ULONG cVal, PSZ *ppszVal);
+typedef BOOL (*PHutilWriteResStrAt)(HPS hps, PPOINTL pptPos, HMODULE hMod,
+                                    ULONG ulId, ULONG cVal, PSZ *ppszVal);
 typedef VOID (*PHutilCharStringRect)(HPS hps, PRECTL pRect, ULONG cbBuf,
                                      PCHAR pcBuf, ULONG ulFlags);
 typedef BOOL (*PHutilSetFontFromPS)(HPS hpsDst, HPS hpsSrc, LONG llcid);
@@ -71,6 +73,7 @@ typedef ULONG (*PHutilQueryProgPath)(ULONG cbBuf, PCHAR pcBuf);
 
 typedef VOID (*PHupdateLock)(VOID);
 typedef VOID (*PHupdateUnlock)(VOID);
+typedef VOID (*PHupdateForce)(HMODULE hMod);
 
 // Strings
 
@@ -79,7 +82,8 @@ typedef LONG (*PHstrFromBits)(ULONG ulVal, ULONG cbBuf, PCHAR pcBuf, BOOL fSlash
 typedef LONG (*PHstrFromBytes)(ULLONG ullVal, ULONG cbBuf, PCHAR pcBuf, BOOL fSlashSec);
 typedef ULONG (*PHstrLoad)(HMODULE hModule, ULONG ulStrId, ULONG cbBuf, PCHAR pcBuf);
 typedef ULONG (*PHstrLoad2)(HMODULE hModule, ULONG ulStrId, PULONG pcbBuf,
-                          PCHAR *ppcBuf);
+                            PCHAR *ppcBuf);
+typedef ULONG (*PHstrFromULL)(PCHAR pcBuf, ULONG cbBuf, ULLONG ullVal);
 
 // Controls
 
@@ -88,6 +92,9 @@ typedef VOID (*PHctrlDlgCenterOwner)(HWND hwnd);
 typedef ULONG (*PHctrlQueryText)(HWND hwnd, ULONG cbBuf, PCHAR pcBuf);
 typedef BOOL (*PHctrlSubclassNotebook)(HWND hwndDlg);
 
+// Help
+
+typedef VOID (*PHhelpShow)(HMODULE hMod, ULONG ulIndex);
 
 
 // DS_* : ds*Update(), ds*Command() result codes
@@ -119,6 +126,12 @@ typedef BOOL (*PHctrlSubclassNotebook)(HWND hwndDlg);
 #define DS_FL_SELITEM_BG_LIST	0x00000002
 // DS_FL_NO_BG_UPDATES - Do not update data source while data unvisible.
 #define DS_FL_NO_BG_UPDATES	0x00000004
+// DS_FL_RES_MENU_TITLE - Use resource string with ID
+// DSINFO._title.ulResId as module's title. Without this flag string
+// DSINFO._title.pszStr used.
+#define DS_FL_RES_MENU_TITLE	0x00000008
+// DS_FL_RES_SORT_BY - Use array's items apszSortBy as resource strings IDs.
+#define DS_FL_RES_SORT_BY	0x00000010
 
 // Constants for helper utilGetColor(,ulColor)
 // ( see srclist.c / dshGetColor() )
@@ -145,12 +158,19 @@ typedef struct _SLINFO {
 
 typedef struct _DSINFO {
   ULONG		cbDSInfo;
-  PSZ		pszMenuTitle;
+  union {
+    PSZ		pszStr;			// Flag DS_FL_RES_MENU_TITLE is NOT set.
+    ULONG	ulResId;		// Flag DS_FL_RES_MENU_TITLE is set.
+  } _title;
   ULONG		cSortBy;
-  PSZ		*apszSortBy;
+  union {
+    PSZ		*apszStr;		// Flag DS_FL_RES_SORT_BY is NOT set.
+    PULONG	aulResId;		// Flag DS_FL_RES_SORT_BY is set.
+  } _sortBy;
   ULONG		ulFlags;		// DS_FL_*
   ULONG		ulHorSpace;		// Horisontal items space scale, %
   ULONG		ulVertSpace;		// Vertical items space scale, %
+  ULONG		ulHelpId;		// Help panel index in <module>.hlp
 } DSINFO, *PDSINFO;
 
 #endif	// DS_H

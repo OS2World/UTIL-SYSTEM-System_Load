@@ -35,12 +35,13 @@ typedef struct _PROPERTIES {
 
 // Strings
 
-#define IDS_FLD_INDEX		100
-#define IDS_FLD_DESCR		101
-#define IDS_FLD_TYPE		102
-#define IDS_FLD_MAC		103
-#define IDS_FLD_SENT		104
-#define IDS_FLD_RECV		105
-#define IDS_FLD_TXSPD		106
-#define IDS_FLD_RXSPD		107
-#define IDS_SPEED		200
+#define IDS_DS_TITLE		1
+#define IDS_FLD_INDEX		2
+#define IDS_FLD_DESCR		3
+#define IDS_FLD_TYPE		4
+#define IDS_FLD_MAC		5
+#define IDS_FLD_SENT		6
+#define IDS_FLD_RECV		7
+#define IDS_FLD_TXSPD		8
+#define IDS_FLD_RXSPD		9
+#define IDS_SPEED		10

@@ -5,7 +5,7 @@ PLUGIN = net
 AUTOR = Andrey Vasilkin
 
 # VERSION - optional
-VERSION = 1.0.0
+VERSION = 1.0.1
 
 # COMMENT - optional
 COMMENT = SystemLoad plugin. Network interfaces activity monitor.

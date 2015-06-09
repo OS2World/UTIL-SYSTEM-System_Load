@@ -6,6 +6,8 @@
 #define DI_TYPE_VDISK		5
 #define DI_TYPE_REMOTE		6
 
+#define DiskInfoSize(pdi) (sizeof(DISKINFO) - CCHMAXPATH + (pdi)->cbFSDName + 1)
+
 typedef struct _DISKINFO {
   ULONG		ulType;			// DI_TYPE_*
   BOOL		fBoot;			// Boot drive flag.
@@ -19,5 +21,5 @@ typedef struct _DISKINFO {
   CHAR		szFSDName[CCHMAXPATH];	// Name of the file-system driver.
 } DISKINFO, *PDISKINFO;
 
-BOOL duDiskInfo(ULONG ulDrv, BOOL fChekFloppy, PDISKINFO pInfo);
+BOOL duDiskInfo(ULONG ulDrv, PDISKINFO pInfo);
 BOOL duEject(ULONG ulDrv, BOOL fUnlock);

@@ -13,7 +13,8 @@
 
 typedef struct _DATASOURCE {
   HMODULE	hModule;		// DLL (module) handle.
-  CHAR		szModule[13];
+  CHAR		szModule[13];		// DLL file name without extension.
+  CHAR		szTitle[64];		// Module title.
   ULONG		ulMenuItemId;
   ULONG		ulIndex;		// Order index.
   PDSINFO	pDSInfo;		// Pointer to module information.
@@ -29,6 +30,7 @@ typedef struct _DATASOURCE {
   LONG		lItemHlForeCol;
   LONG		lItemHlBackCol;
   SIZEL		sizeEm;
+  HWND		hwndHelp;		// Help instance of data source.
 
   // Functions of the data source
   PDSINFO APIENTRY (*fnInstall)(HMODULE hMod, PSLINFO pSLInfo);

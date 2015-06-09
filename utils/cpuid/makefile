@@ -13,7 +13,6 @@ $(BINPATH)\$(BINFILE): $(OBJS)
 .c.obj:
   wcc386 $(CFLAGS) $<
 
-.SILENT
 clean: .SYMBOLIC
-  if exist *.obj del *.obj
-  if exist $(BINPATH)\$(BINFILE) del $(BINPATH)\$(BINFILE)
+  @if exist *.obj @del *.obj
+  @if exist $(BINPATH)\$(BINFILE) @del $(BINPATH)\$(BINFILE)

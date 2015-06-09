@@ -68,11 +68,9 @@ static VOID _setMenuDataSources(HWND hwndMenu)
     {
       // First 9 items will have tip Ctrl+1 .. Ctrl+9
       _bprintf( &szBuf, sizeof(szBuf), "%s\tCtrl+%c", 
-                pDataSrc->pDSInfo->pszMenuTitle, (CHAR)('1' + stMI.iPosition) );
+                pDataSrc->szTitle, (CHAR)('1' + stMI.iPosition) );
       pszTitle = &szBuf;
     }
-    else
-      pszTitle = pDataSrc->pDSInfo->pszMenuTitle;
 
     // Insert new main menu item to select data source
     sItemId = SHORT1FROMMR( WinSendMsg( hwndMenu, MM_INSERTITEM,
@@ -470,6 +468,12 @@ MRESULT EXPENTRY ClientWndProc(HWND hwnd, ULONG msg, MPARAM mp1, MPARAM mp2)
       // Update details.
       WinSendMsg( WinWindowFromID( hwnd, IDWND_DETAILS ), WM_SL_UPDATE_DETAILS,
                   NULL, NULL );
+      return (MRESULT)FALSE;
+
+    case WM_SL_DETAILSACTIVATE:
+      // Details window was activated. We transfer activation to list window.
+      WinSetWindowPos( WinWindowFromID( hwnd, IDWND_LIST ), HWND_TOP,
+                       0, 0, 0, 0, SWP_ACTIVATE );
       return (MRESULT)FALSE;
   }
 

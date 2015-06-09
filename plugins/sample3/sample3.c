@@ -49,7 +49,8 @@ static DSINFO stDSInfo =
   &apszSortBy,				// "Sort-by" strings.
   0,					// Flags DS_FL_*
   100,					// Items horisontal space, %Em
-  100					// Items vertical space, %Em
+  100,					// Items vertical space, %Em
+  0					// Help main panel index.
 };
 
 static HMODULE		hDSModule;	// Module handle.
@@ -226,7 +227,7 @@ DSEXPORT ULONG APIENTRY dsGetCount()
 // data which changes by thread and uses in this function (to avoid calls
 // dsGetUpdateDelay() and dsUpdate()). Functions dsGetUpdateDelay() and
 // dsUpdate() will not be called during execution of other module's interface
-// functions, except dsLoadDlg().
+// functions, except dsLoadDlg(), dsEnter() and dsCommand().
 // dsGetUpdateDelay() calls rather frequent, it allows you to change intervals
 // dynamically.
 

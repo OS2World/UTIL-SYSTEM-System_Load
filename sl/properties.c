@@ -11,36 +11,47 @@
 
 static MRESULT EXPENTRY DialogProc(HWND hwnd, ULONG msg, MPARAM mp1, MPARAM mp2)
 {
+  ULONG		ulMsg;
+  LONG		lPageId;
+
   switch( msg )
   {
     case WM_COMMAND:
       switch( COMMANDMSG( &msg )->cmd )
       {
         case IDD_PB_UNDO:
+          ulMsg = WM_SL_UNDO;
+          break;
+
         case IDD_PB_DEFAULT:
-          {
-            LONG	lPageId;
-            HWND	hwndPage = NULLHANDLE;
+          ulMsg = WM_SL_DEFAULT;
+          break;
 
-            lPageId = (LONG)WinSendDlgItemMsg( hwnd, IDD_NOTEBOOK,
-                              BKM_QUERYPAGEID, 0,
-                              MPFROM2SHORT( BKA_TOP, BKA_MAJOR ) );
+        case IDD_PB_HELP:
+          ulMsg = WM_SL_HELP;
+          break;
 
-            if ( lPageId != 0 && lPageId != BOOKERR_INVALID_PARAMETERS )
-              hwndPage = (HWND)WinSendDlgItemMsg( hwnd, IDD_NOTEBOOK,
+        default:
+          return (MRESULT)FALSE;
+      }
+
+      // Send messages WM_SL_UNDO/WM_SL_DEFAULT/WM_SL_HELP to page's
+      // procedure (at data source).
+
+      lPageId = (LONG)WinSendDlgItemMsg( hwnd, IDD_NOTEBOOK,
+                                         BKM_QUERYPAGEID, 0,
+                                         MPFROM2SHORT( BKA_TOP, BKA_MAJOR ) );
+
+      if ( lPageId != 0 && lPageId != BOOKERR_INVALID_PARAMETERS )
+      {
+        HWND	hwndPage = (HWND)WinSendDlgItemMsg( hwnd, IDD_NOTEBOOK,
                                                   BKM_QUERYPAGEWINDOWHWND,
                                                   MPFROMLONG( lPageId ), 0 );
-
-            if ( hwndPage != NULLHANDLE &&
-                 hwndPage != BOOKERR_INVALID_PARAMETERS )
-              WinSendMsg( hwndPage,
-                          COMMANDMSG( &msg )->cmd == IDD_PB_UNDO ?
-                            WM_SL_UNDO : WM_SL_DEFAULT,
-                          0, 0 );
-          }
-          return (MRESULT)TRUE;
+        if ( hwndPage != NULLHANDLE &&
+             hwndPage != BOOKERR_INVALID_PARAMETERS )
+          WinSendMsg( hwndPage, ulMsg, 0, 0 );
       }
-      return (MRESULT)FALSE;
+      return (MRESULT)TRUE;
   }
 
   return WinDefDlgProc( hwnd, msg, mp1, mp2 );
@@ -97,7 +108,7 @@ VOID dlgProperties(HWND hwndOwner)
                                       BKA_LAST ) );
 
       WinSendMsg( hwndNB, BKM_SETTABTEXT, MPFROMLONG( lPageId ),
-                  MPFROMP( pDataSrc->pDSInfo->pszMenuTitle ) );
+                  MPFROMP( pDataSrc->szTitle ) );
       WinSendMsg( hwndNB, BKM_SETPAGEWINDOWHWND, MPFROMLONG( lPageId ),
                   MPFROMLONG( ahDSPages[ulPageIdx] ) );
       WinSetOwner( ahDSPages[ulPageIdx], hwndNB );
