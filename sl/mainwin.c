@@ -280,9 +280,11 @@ static MRESULT _wmCreate(HWND hwnd, MPARAM mp1, MPARAM mp2)
   {
     // Use default position and size.
 
-    alSizePos[0] = (ulCXScr >> 2) + (ulCXScr >> 5);	// Left
+//    alSizePos[0] = (ulCXScr >> 2) + (ulCXScr >> 5);	// Left
+//    alSizePos[2] = (ulCXScr >> 1) - (ulCXScr >> 4);	// Width
+    alSizePos[2] = ulCXScr >> 1;			// Width
+    alSizePos[0] = ulCXScr >> 2;			// Left
     alSizePos[1] = ulCYScr >> 2;			// Bottom
-    alSizePos[2] = (ulCXScr >> 1) - (ulCXScr >> 4);	// Width
     alSizePos[3] = ulCYScr >> 1;			// Height
     alSizePos[4] = (ulCYScr >> 3) + (ulCYScr >> 4);	// Details win. height
   }

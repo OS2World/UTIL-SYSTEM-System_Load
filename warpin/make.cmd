@@ -33,7 +33,8 @@ call SysFileDelete "sl.wpi"
 "5 -c..\bin os4irq.dll " || ,
 "6 -c..\bin process.dll " || ,
 "7 -c..\bin traffic.dll traffic.hlp " || ,
-"8 -c..\bin cpuid.exe getver.exe rxgetver.dll rxgetver.cmd sysstate.exe cputemp.exe " || ,
+"8 -c..\bin sysinfo.dll sysinfo.hlp " || ,
+"9 -c..\bin cpuid.exe getver.exe rxgetver.dll rxgetver.cmd sysstate.exe cputemp.exe " || ,
 "-s " || fileScriptOutput
 
 call SysFileDelete fileScriptOutput

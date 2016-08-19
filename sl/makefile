@@ -1,6 +1,6 @@
 VER_MAJOR    = 1
 VER_MINOR    = 0
-VER_REVISION = 2
+VER_REVISION = 3
 
 AUTOR = Andrey Vasilkin
 COMMENT = System load monitor

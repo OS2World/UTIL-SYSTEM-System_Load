@@ -59,6 +59,14 @@
          >IRQ</PCK>
 
     <PCK INDEX=8
+         PACKAGEID="Digi\SystemLoad\System Load module - DosQuerySysInfo\<!-- BL:..\bin\sysinfo.dll -->"
+         TARGET="$(1)"
+         TITLE="Module: DosQuerySysInfo()"
+         REQUIRES=1
+         SELECT | FIXED
+         >DosQuerySysInfo</PCK>
+
+    <PCK INDEX=9
          PACKAGEID="Digi\SystemLoad\System Load utilites\1\1\0"
          TARGET="$(1)"
          TITLE="System Load utilites"

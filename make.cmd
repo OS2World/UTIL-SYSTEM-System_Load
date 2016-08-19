@@ -25,7 +25,7 @@ if .%WATCOM%. == .. goto needow
 rem	Make binaries
 rem	=============
 
-set plugins=cpu drives net os4irq process traffic
+set plugins=cpu drives net os4irq process traffic sysinfo
 rem set plugins=%plugins% sample1 sample2 sample3
 set utils=cpuid getver rxgetver sysstate cputemp
 

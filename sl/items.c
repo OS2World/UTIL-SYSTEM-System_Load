@@ -113,9 +113,12 @@ VOID APIENTRY updateThread(ULONG ulData)
   LONG		lTimeRemains;
   ULONG		ulRC;
 
-  ulRC = DosSetPriority( PRTYS_THREAD, PRTYC_TIMECRITICAL, 0, 0 );
+//  ulRC = DosSetPriority( PRTYS_THREAD, PRTYC_TIMECRITICAL, 0, 0 );
+  ulRC = DosSetPriority( PRTYS_THREAD, PRTYC_REGULAR, 0, 0 );
   if ( ulRC != NO_ERROR )
     debug( "Warning! DosSetPriority(), rc = %u" );
+  else
+    ulRC = DosSetPriority( PRTYS_THREAD, 0, PRTYD_MAXIMUM, 0 );
 
   ulRC = DosRequestMutexSem( hmtxUpdate, SEM_INDEFINITE_WAIT );
   if ( ulRC != NO_ERROR )

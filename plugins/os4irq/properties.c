@@ -77,7 +77,7 @@ static VOID _default(HWND hwnd)
     // Insert field name and set field number (w/wo flag "hidden") for item.
     sIndex = WinInsertLboxItem( hwndControl, LIT_END,
                                 apszFields[ulField & ~FLD_FL_HIDDEN] );
-    if ( sIndex != LIT_MEMERROR || sIndex != LIT_ERROR )
+    if ( sIndex != LIT_MEMERROR && sIndex != LIT_ERROR )
       WinSendMsg( hwndControl, LM_SETITEMHANDLE, MPFROMSHORT( sIndex ),
                   MPFROMLONG( ulField ) );
   }
@@ -139,7 +139,7 @@ static VOID _undo(HWND hwnd)
     // Insert field name and set field number (w/wo flag "hidden") for item.
     sIndex = WinInsertLboxItem( hwndControl, LIT_END,
                                 apszFields[ulField & ~FLD_FL_HIDDEN] );
-    if ( sIndex != LIT_MEMERROR || sIndex != LIT_ERROR )
+    if ( sIndex != LIT_MEMERROR && sIndex != LIT_ERROR )
       WinSendMsg( hwndControl, LM_SETITEMHANDLE, MPFROMSHORT( sIndex ),
                   MPFROMLONG( ulField ) );
   }
