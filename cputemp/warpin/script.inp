@@ -1,0 +1,92 @@
+<WARPIN>
+  <HEAD>
+
+    <PCK INDEX=101
+         PACKAGEID="Digi\CPUTemp\CPU temperature API\<!-- BL:..\bin\cputemp.dll -->"
+         TITLE="Intel CPU temperature API"
+         TARGET="?:\OS2\DLL"
+         REQUIRES="Digi\CPUTemp\Model-Specific Registers reader\2\0\0"
+         NODESELECT | NOBASE
+         >Dynamic library to query temperature sensors</PCK>
+
+    <PCK INDEX=102
+         PACKAGEID="Digi\CPUTemp\Model-Specific Registers reader\<!-- BL:..\bin\rdmsr.sys -->"
+         TITLE="Model-Specific Registers reader driver"
+         TARGET="?:\OS2"
+         SELECT | NOBASE
+         EXECUTE="CONFIGSYS | $(102)\rdmsr.cmd | -d ?:\ -f $(102)\rdmsr.sys -i 1"
+         DEEXECUTE="$(102)\rdmsr.cmd | -d ?:\ -f $(102)\rdmsr.sys -i 0"
+         >Model-Specific Registers reader driver</PCK>
+
+    <PCK INDEX=1
+         PACKAGEID="Digi\CPUTemp\CPUTemp utility\<!-- BL:..\bin\cputemp.exe -->"
+         TITLE="cputemp utility (temperature monitor)"
+         TARGET="$(WARPIN_DEFAULTTOOLSPATH)"
+         REQUIRES="Digi\CPUTemp\CPU temperature API\2\0\0"
+         NOBASE
+         >cputemp.exe command line utility</PCK>
+
+    <PCK INDEX=2
+         PACKAGEID="Digi\CPUTemp\XWP CPU Temperature plug-in\<!-- BL:..\bin\cput.dll -->"
+         TITLE="XWP CPU Temperature plug-in"
+         TARGET="$(Ulrich M”ller\XWorkplace\Kernel)\plugins\xcenter"
+         EXECUTE="REGISTERCLASS | rem"
+         SELECT
+         REQUIRES="Digi\CPUTemp\CPU temperature API\2\0\0"
+         REQUIRES="Ulrich M”ller\XWorkplace\Kernel\0\9\12"
+         >XWP CPU Temperature plug-in</PCK>
+
+  </HEAD>
+  <BODY>
+
+    <PAGE INDEX=1 TYPE=README>
+      <TEXT>
+        Please read this license.
+        Select "Next" to continue or "Cancel" to abort installation.
+      </TEXT>
+      <README FORMAT=PLAIN>
+Intel CPU temperature tools is available for use under the following license,
+commonly known as the 3-clause (or "modified") BSD license:
+
+
+Copyright (c) 2015, Vasilkin Andrey
+All rights reserved.
+
+Redistribution and use in source and binary forms, with or without
+modification, are permitted provided that the following conditions are met:
+
+1. Redistributions of source code must retain the above copyright notice, this
+list of conditions and the following disclaimer.
+
+2. Redistributions in binary form must reproduce the above copyright notice,
+this list of conditions and the following disclaimer in the documentation
+and/or other materials provided with the distribution.
+
+3. Neither the name of the copyright holder nor the names of its contributors
+may be used to endorse or promote products derived from this software without
+specific prior written permission.
+
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
+FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+      </README>
+      <NEXTBUTTON TARGET=2>~Next</NEXTBUTTON>
+    </PAGE>
+
+    <PAGE INDEX=2 TYPE=CONTAINER>
+      <NEXTBUTTON TARGET=0>I~nstall</NEXTBUTTON>
+      <TEXT>
+        Installing Intel CPU Temperature tools.
+        Please select the packages which are to be installed.
+      </TEXT>
+    </PAGE>
+
+  </BODY>
+</WARPIN>

@@ -1,0 +1,73 @@
+/*
+    OS/4 RDMSR$
+
+    Copyright (c) OS/4 Team 2017
+    All Rights Reserved
+
+   ÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄ
+
+   ª®¬ ­¤  Init áâà â¥£¨¨
+
+*/
+
+#include <ddk4/os4types.h>
+#include <ddk4/bsekee.h>
+#include <ddk4/bseerr.h>
+#include <ddk4/reqpkt4.h>
+
+
+//#pragma code_seg ( _TEXTINIT, CODE )
+
+/*
+char acBanner[] = "Model-Specific Registers access driver.\r\n"
+                  "  \"Rendezvous\" kernel support: ";
+char acRenMsg[] = "YES.\r\n";
+char acNoRenMsg[] = "NO.\r\n";
+
+extern uint16_t far pascal DOSPUTMESSAGE(uint16_t, uint16_t, char far *);
+
+static int strlen(char *s)
+{
+    int i = 0;
+    while (*s++) i++;
+    return (i);
+}
+*/
+
+
+// ¯á¥¢¤®¯¥à¥¬¥­­ ï, à¥ «¨§ã¥¬ ï wlink. Œ àª¨àã¥â ª®­¥æ á¥£¬¥­â  BSS
+extern char            end;
+extern char            CodeEnd;
+extern char            Strat16;
+extern uint16_t        MainEntry;
+
+/* ÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄ
+   ÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄ */
+
+void __far Strat_Init32(RPINITIN far *pRPI);
+#pragma aux Strat_Init32 = "jmp Strat16"  \
+   parm [es bx];
+
+#pragma aux Strat_Init parm [es bx];
+void __far Strat_Init(RPINITIN far *pRPI)
+{
+  RPINITOUT far *pRPO = (RPINITOUT far *) pRPI;
+//    char          *pcRenMsg;
+
+  // Patch the driver entry point.
+  MainEntry = (uint16_t)&Strat16;
+
+  //Device_Help = pRPI->DevHlpEP;
+
+/*
+  DOSPUTMESSAGE( 1, strlen( acBanner ), acBanner );
+  pcRenMsg = (uint32_t)&KernKEEVersion < 0x00010006 ? acRenMsg : acNoRenMsg;
+  DOSPUTMESSAGE( 1, strlen( pcRenMsg ), pcRenMsg );
+*/
+
+  //  return size of segments
+  pRPO->CodeEnd = (uint16_t) &CodeEnd;
+  pRPO->DataEnd = (uint16_t) &end;
+
+  pRPO->rph.Status = STATUS_DONE;
+}

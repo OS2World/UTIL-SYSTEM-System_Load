@@ -1,0 +1,98 @@
+<WARPIN>
+  <HEAD>
+
+    <PCK INDEX=1
+         PACKAGEID="Digi\SystemLoad\System Load monitor\<!-- BL:..\bin\sl.exe -->"
+         TITLE="System Load monitor"
+         TARGET="$(WARPIN_DEFAULTAPPSPATH)\SL"
+         BASE | NODESELECT
+         CREATEOBJECT='WPFolder|SystemLoad|<WP_DESKTOP>|OBJECTID=<SYSLFOLDER>;ALWAYSSORT=YES;OPEN=DEFAULT;ICONFILE=$(1)\slfld.ico;ICONNFILE=1,$(1)\slfld_o.ico;'
+         CREATEOBJECT='WPProgram|ReadMe|<SYSLFOLDER>|EXENAME=e.exe;OBJECTID=<SLFOLDER_README>;TITLE=ReadMe;PROGTYPE=PM;PARAMETERS=$(1)\readme.txt;STARTUPDIR=$(1);'
+         CREATEOBJECT="WPProgram|SystemLoad|<SYSLFOLDER>|EXENAME=$(1)\sl.exe;OBJECTID=<SYSTEMLOAD>;"
+         EXECUTE="del $(1)\slfld.ico $(1)\slfld_o.ico"
+         >System Load monitor</PCK>
+
+    <PCK INDEX=100
+         PACKAGEID="Digi\SystemLoad\System Load module - CPU\<!-- BL:..\bin\cpu.dll -->"
+         TITLE="Module: CPU"
+         TARGET="$(1)"
+         SELECT | FIXED
+         >CPU</PCK>
+
+    <PCK INDEX=110
+         PACKAGEID="Digi\SystemLoad\System Load module - Drives\<!-- BL:..\bin\drives.dll -->"
+         TITLE="Module: Drives"
+         TARGET="$(1)"
+         SELECT | FIXED
+         REQUIRES=1
+         >Drives</PCK>
+
+    <PCK INDEX=120
+         PACKAGEID="Digi\SystemLoad\System Load module - Network\<!-- BL:..\bin\net.dll -->"
+         TITLE="Module: Network Adapters"
+         TARGET="$(1)"
+         SELECT | FIXED
+         REQUIRES=1
+         >Network Adapters</PCK>
+
+    <PCK INDEX=130
+         PACKAGEID="Digi\SystemLoad\System Load module - IRQ\<!-- BL:..\bin\os4irq.dll -->"
+         TITLE="Module: IRQ (OS/4 kernel required)"
+         TARGET="$(1)"
+         SELECT | FIXED
+         REQUIRES=1
+         >IRQ</PCK>
+
+    <PCK INDEX=140
+         PACKAGEID="Digi\SystemLoad\System Load module - Processes\<!-- BL:..\bin\process.dll -->"
+         TITLE="Module: Processes"
+         TARGET="$(1)"
+         SELECT | FIXED
+         REQUIRES=1
+         >IRQ</PCK>
+
+    <PCK INDEX=150
+         PACKAGEID="Digi\SystemLoad\System Load module - Traffic\<!-- BL:..\bin\traffic.dll -->"
+         TITLE="Module: Traffic"
+         TARGET="$(1)"
+         SELECT | FIXED
+         REQUIRES=1
+         >IRQ</PCK>
+
+    <PCK INDEX=160
+         PACKAGEID="Digi\SystemLoad\System Load module - DosQuerySysInfo\<!-- BL:..\bin\sysinfo.dll -->"
+         TITLE="Module: DosQuerySysInfo()"
+         TARGET="$(1)"
+         SELECT | FIXED
+         REQUIRES=1
+         >DosQuerySysInfo</PCK>
+
+    <PCK INDEX=2
+         PACKAGEID="Digi\SystemLoad\System Load utilites\1\1\1"
+         TITLE="System Load utilites"
+         TARGET="$(1)"
+         SELECT
+         >Utilites</PCK>
+
+  </HEAD>
+  <BODY>
+
+    <PAGE INDEX=1 TYPE=README>
+      <NEXTBUTTON TARGET=2>~Next</NEXTBUTTON>
+      <README EXTRACTFROMPCK="1">License.txt</README>
+      <TEXT>
+        Please read this license.
+        Select "Next" to continue or "Cancel" to abort installation.
+      </TEXT>
+    </PAGE>
+
+    <PAGE INDEX=2 TYPE=CONTAINER>
+      <NEXTBUTTON TARGET=0>I~nstall</NEXTBUTTON>
+      <TEXT>
+        Installing System Load monitor
+        Please select the packages which are to be installed.
+      </TEXT>
+    </PAGE>
+
+  </BODY>
+</WARPIN>

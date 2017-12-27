@@ -1,0 +1,15 @@
+#include <os2.h>
+#include "cput.h"
+
+STRINGTABLE PRELOAD
+{
+  IDS_CELSIUS_UM,       "øC";
+  IDS_FAHRENHEIT_UM,    "øF";
+  IDS_CPU,              "CPU ";
+  IDS_OFFLINE,          "Offline";
+  IDS_CELSIUS_ITEM,     "~Celsius";
+  IDS_FAHRENHEIT_ITEM,  "~Fahrenheit";
+  IDS_UNSUPPORTED_CPU,  "CPU not supported";
+  IDS_INVALID_VALUE,    "Invalid sensor value was received";
+  IDS_NO_DRIVER,        "Cannot open driver RDMSR$";
+}
