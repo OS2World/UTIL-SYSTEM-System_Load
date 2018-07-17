@@ -58,6 +58,8 @@ static MRESULT _wmCreate(HWND hwnd)
   // Create context menu
   pstWinData->hwndCtxMenu = WinCreateMenu( HWND_DESKTOP, pCtxMenu );
   DosFreeResource( pCtxMenu );
+  WinSetPresParam( pstWinData->hwndCtxMenu, PP_FONTNAMESIZE,
+                   strlen( "8.Helv" ) + 1, "8.Helv" );
 
   // Store context menu top-level items IDs
 
@@ -770,6 +772,31 @@ MRESULT EXPENTRY ListWndProc(HWND hwnd, ULONG msg, MPARAM mp1, MPARAM mp2)
 }
 
 
+// Subclass list window frame procedure to redirect accelerator messages to
+// the main frame window.
+
+static PFNWP           fnListFrameWndOrgProc;
+
+MRESULT EXPENTRY ListFrameWndProc(HWND hwnd, ULONG msg, MPARAM mp1, MPARAM mp2)
+{
+  switch( msg )
+  {
+    case WM_SYSCOMMAND:
+      if ( SHORT1FROMMP(mp2) == CMDSRC_ACCELERATOR )
+      {
+        HWND hwndMainFrame =
+                WinQueryWindow( WinQueryWindow( hwnd, QW_PARENT ), QW_PARENT );
+
+        WinPostMsg( hwndMainFrame, msg, mp1, mp2 );
+        return MRFROMSHORT(0);
+      }
+      break;
+  }
+
+  return fnListFrameWndOrgProc( hwnd, msg, mp1, mp2 );
+}
+
+
 HWND lstInstall(HWND hwndParent, ULONG ulId)
 {
   HWND		hwnd, hwndFrame;
@@ -790,6 +817,8 @@ HWND lstInstall(HWND hwndParent, ULONG ulId)
     debug( "WinCreateStdWindow() fail" );
     return NULLHANDLE;
   }
+
+  fnListFrameWndOrgProc = WinSubclassWindow( hwndFrame, ListFrameWndProc );
 
   WinSetFocus( HWND_DESKTOP, hwndFrame );
   return hwnd;

@@ -1,5 +1,7 @@
 // Digi: source code from
 // https://msdn.microsoft.com/en-us/library/vstudio/hskdteyh%28v=vs.100%29.aspx
+//
+// 20180704 AVX detection added.
 
 #define DIGI_CODE
 
@@ -149,6 +151,9 @@ int main(int argc, char* argv[])
     bool    bSSE41Extensions = false;
     bool    bSSE42Extensions = false;
     bool    bPOPCNT = false;
+#ifdef DIGI_CODE
+    bool    bAVX = false;
+#endif
 
     bool    bMultithreading = false;
 
@@ -234,12 +239,15 @@ int main(int argc, char* argv[])
             bThermalMonitor2 = (CPUInfo[2] & 0x100) || false;
             bSupplementalSSE3 = (CPUInfo[2] & 0x200) || false;
             bL1ContextID = (CPUInfo[2] & 0x300) || false;
-            bCMPXCHG16B= (CPUInfo[2] & 0x2000) || false;
+            bCMPXCHG16B = (CPUInfo[2] & 0x2000) || false;
             bxTPRUpdateControl = (CPUInfo[2] & 0x4000) || false;
             bPerfDebugCapabilityMSR = (CPUInfo[2] & 0x8000) || false;
             bSSE41Extensions = (CPUInfo[2] & 0x80000) || false;
             bSSE42Extensions = (CPUInfo[2] & 0x100000) || false;
-            bPOPCNT= (CPUInfo[2] & 0x800000) || false;
+            bPOPCNT = (CPUInfo[2] & 0x800000) || false;
+#ifdef DIGI_CODE
+            bAVX = (CPUInfo[2] & 0x10000000) || false;
+#endif
             nFeatureInfo = CPUInfo[3];
             bMultithreading = (nFeatureInfo & (1 << 28)) || false;
         }
@@ -349,7 +357,10 @@ int main(int argc, char* argv[])
              bVirtualMachineExtensions || bEnhancedIntelSpeedStepTechnology ||
              bThermalMonitor2 || bSupplementalSSE3 || bL1ContextID || 
              bCMPXCHG16B || bxTPRUpdateControl || bPerfDebugCapabilityMSR || 
-             bSSE41Extensions || bSSE42Extensions || bPOPCNT || 
+             bSSE41Extensions || bSSE42Extensions || bPOPCNT ||
+#ifdef DIGI_CODE
+             bAVX ||
+#endif
              bLAHF_SAHFAvailable || bCmpLegacy || bSVM ||
              bExtApicSpace || bAltMovCr8 ||
              bLZCNT || bSSE4A || bMisalignedSSE ||
@@ -388,6 +399,10 @@ int main(int argc, char* argv[])
                 printf_s("\tSSE4.2 Extensions\n");
             if  (bPOPCNT)
                 printf_s("\tPPOPCNT Instruction\n");
+#ifdef DIGI_CODE
+            if  (bAVX)
+                printf_s("\tAVX Extensions\n");
+#endif
 
             i = 0;
             nIds = 1;

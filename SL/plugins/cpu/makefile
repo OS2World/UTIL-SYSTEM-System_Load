@@ -5,7 +5,7 @@ PLUGIN = cpu
 AUTOR = Andrey Vasilkin
 
 # VERSION - optional
-VERSION = 1.2.3
+VERSION = 1.2.4
 
 # COMMENT - optional
 COMMENT = SystemLoad plugin. CPU monitor.

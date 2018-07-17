@@ -151,6 +151,7 @@ MESSAGETABLE
   IDMSG_PF_SSE41EXTENSIONS	"SSE4.1 Extensions"
   IDMSG_PF_SSE42EXTENSIONS	"SSE4.2 Extensions"
   IDMSG_PF_POPCNT		"PPOPCNT Instruction"
+  IDMSG_PF_AVX			"AVX Extensions"
   IDMSG_PF_FEATURE1		"x87 FPU On Chip"
   IDMSG_PF_FEATURE2		"Virtual-8086 Mode Enhancement"
   IDMSG_PF_FEATURE3		"Debugging Extensions"

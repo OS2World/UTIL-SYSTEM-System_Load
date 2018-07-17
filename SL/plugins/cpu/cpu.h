@@ -155,6 +155,7 @@ typedef struct _CPU {
 #define IDMSG_PF_SSE41EXTENSIONS	30
 #define IDMSG_PF_SSE42EXTENSIONS	31
 #define IDMSG_PF_POPCNT			32
+//#define IDMSG_PF_AVX
 #define IDMSG_PF_FEATURE1		33
 #define IDMSG_PF_FEATURE2		34
 #define IDMSG_PF_FEATURE3		35
@@ -219,3 +220,6 @@ typedef struct _CPU {
 #define IDMSG_COPY_FAIL			92
 #define IDMSG_INSTALL_FAIL		93
 #define IDMSG_INSTALL_OK		94
+
+// 20180704
+#define IDMSG_PF_AVX			95

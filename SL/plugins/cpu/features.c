@@ -1,3 +1,5 @@
+// 20180704 Digi - AVX detection added.
+
 #define INCL_ERRORS
 #define INCL_WIN
 #include <os2.h>
@@ -275,6 +277,7 @@ VOID showFeatures(HWND hwndOwner)
     BOOL		fSSE41Extensions;
     BOOL		fSSE42Extensions;
     BOOL		fPOPCNT;
+    BOOL		fAVX;
     ULONG		ulFeatureInfo;
     BOOL		fMultithreading;
 
@@ -359,7 +362,8 @@ VOID showFeatures(HWND hwndOwner)
   stInf.fPerfDebugCapabilityMSR = (alInfo[2] & 0x8000) != 0;
   stInf.fSSE41Extensions = (alInfo[2] & 0x80000) != 0;
   stInf.fSSE42Extensions = (alInfo[2] & 0x100000) != 0;
-  stInf.fPOPCNT= (alInfo[2] & 0x800000) != 0;
+  stInf.fPOPCNT = (alInfo[2] & 0x800000) != 0;
+  stInf.fAVX = (alInfo[2] & 0x10000000) != 0;
   stInf.ulFeatureInfo = alInfo[3];
   stInf.fMultithreading = (stInf.ulFeatureInfo & (1 << 28)) != 0;
 
@@ -530,6 +534,8 @@ VOID showFeatures(HWND hwndOwner)
       _textString( IDMSG_PF_SSE42EXTENSIONS );
     if ( stInf.fPOPCNT )
       _textString( IDMSG_PF_POPCNT );
+    if ( stInf.fAVX )
+      _textString( IDMSG_PF_AVX );
 
     for( ulIdx = 0; ulIdx < 32; ulIdx++ )
     {

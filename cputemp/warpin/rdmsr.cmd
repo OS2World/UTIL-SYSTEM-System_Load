@@ -127,9 +127,9 @@ end
    Remove "DRIVER=[.....]driver.sys", than add driver in each config.EXT
 */
 
-if RxFuncQuery( "SysLoadFuncs" ) = 1 then
+if RxFuncQuery('SysLoadFuncs') = 1 then
 do
-  call RxFuncAdd "SysLoadFuncs", "RexxUtil", "SysLoadFuncs"
+  call RxFuncAdd 'SysLoadFuncs', 'RexxUtil', 'SysLoadFuncs'
   call SysLoadFuncs
 end
 

@@ -1,13 +1,13 @@
 VER_MAJOR    = 1
 VER_MINOR    = 0
-VER_REVISION = 5
+VER_REVISION = 6
 
 AUTOR = Andrey Vasilkin
 COMMENT = System load monitor
 PROG = sl
 
 # Uncomment next line and execute WMAKE clean / WMAKE to create a debug version.
-#DEBUGCODE = YES
+# DEBUGCODE = YES
 
 # -------------------
 
@@ -97,9 +97,9 @@ infCompiling: .SYMBOLIC
   @echo *  Compiling: $(COMMENT) $(VERSION) ...
 
 clean: .SYMBOLIC
-  if exist *.obj del *.obj
-  if exist $(RESFILE) del $(RESFILE)
-  if exist $(LNKFILE) del $(LNKFILE)
-  if exist $(PROG).map del $(PROG).map
-  if exist $(BINPATH)\$(DBGFILE) del $(BINPATH)\$(DBGFILE)
-  if exist $(BINFILE) del $(BINFILE)
+  @if exist *.obj del *.obj
+  @if exist $(RESFILE) del $(RESFILE)
+  @if exist $(LNKFILE) del $(LNKFILE)
+  @if exist $(PROG).map del $(PROG).map
+  @if exist $(BINPATH)\$(DBGFILE) del $(BINPATH)\$(DBGFILE)
+  @if exist $(BINFILE) del $(BINFILE)
