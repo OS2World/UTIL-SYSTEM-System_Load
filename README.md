@@ -15,6 +15,7 @@ AUTHORS
 
 LINKS
 ===============
+* http://os2.snc.ru/product-SystemLoad.html
 * ftp://digi.os2.snc.ru/pub/SystemLoad/
 
 
