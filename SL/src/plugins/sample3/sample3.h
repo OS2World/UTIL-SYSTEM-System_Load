@@ -1,0 +1,4 @@
+#define IDD_DSPROPERTIES	100
+#define IDD_RB_FAST		101
+#define IDD_RB_SLOW		102
+

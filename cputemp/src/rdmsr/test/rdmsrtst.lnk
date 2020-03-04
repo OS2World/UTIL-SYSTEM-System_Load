@@ -1,0 +1,9 @@
+SYSTEM os2v2
+NAME ..\..\..\bin\rdmsrtst.exe
+OPTION ELIMINATE
+OPTION MAP=rdmsrtst
+OPTION QUIET
+OPTION OSNAME='OS/2, eComStation and ArcaOS'
+FILE rdmsrtst.obj
+IMPORT cputempQuery                 cputemp .1
+OPTION DESCRIPTION '@#Andrey Vasilkin:0.0.1#@##1## 2020-02-27 02:59:04      DIGI-HOME::ru:RUS:::@@Test RDMSR driver'

@@ -1,0 +1,59 @@
+#DEBUGCODE = yes
+
+!ifndef NAME
+!error Variable NAME must be specified in your makefile.
+!endif
+
+!ifndef SRCS
+!error Variable SRCS must be specified in your makefile.
+!endif
+
+BINPATH = ..\..\..\bin
+
+INCPATH +=..\..\h;
+
+BINFILE = $(BINPATH)\$(NAME).exe
+LNKFILE = $(NAME).lnk
+DBGFILE = $(NAME).dbg
+
+!include ..\..\..\..\global.mif
+
+.c: ..\..\common
+
+!ifdef DEBUGCODE
+SRCS += debug.c
+!endif
+
+$(BINFILE): $(BINPATH) $(OBJS) $(LNKFILE) $(RESFILE) $(HLPFILE)
+  $(INFLINK)
+  $(LINK) @$(LNKFILE)
+  $(LXLITE) $@ >nul
+
+$(LNKFILE): $__MAKEFILES__
+#  @echo *  Creating file: $@
+  @%create $@
+  @%append $@ SYSTEM os2v2
+  @%append $@ NAME $(BINFILE)
+  @%append $@ OPTION MAP=$(NAME)
+  @%append $@ OPTION ELIMINATE
+  @%append $@ OPTION QUIET
+  @%append $@ OPTION OSNAME='OS/2, eComStation and ArcaOS'
+!ifdef DATEUTIL
+  @$(DATEUTIL) +"OPTION DESCRIPTION '@$#$(AUTHOR):$(VERSION)$#@$#$#1$#$# %F %T      $(%HOSTNAME)::ru:RUS:::@@$(BLCOMMENT)'" >>$^@
+!else
+  @%append $@ OPTION DESCRIPTION '@$#$(AUTHOR):$(VERSION)$#@$#$#1$#$#                          $(%HOSTNAME)::ru:RUS:0::@@$(BLCOMMENT)'
+!endif
+!ifdef LIBPATH
+  @%append $@ LIBPATH $(LIBPATH)
+!endif
+!ifdef LIBS
+  @for %i in ($(LIBS)) do @%append $@ LIB %i
+!endif
+  @for %i in ($(OBJS)) do @%append $@ FILE %i
+
+clean: .SYMBOLIC
+  @if exist *.obj @del *.obj
+  @if exist *.err @del *.err
+  @if exist $(LNKFILE) @del $(LNKFILE)
+  @if exist $(NAME).map @del $(NAME).map
+  @if exist $(BINFILE) @del $(BINFILE)

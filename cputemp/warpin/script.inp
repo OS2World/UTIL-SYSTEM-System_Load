@@ -14,8 +14,8 @@
          TITLE="Model-Specific Registers reader driver"
          TARGET="?:\OS2"
          SELECT | NOBASE
-         EXECUTE="CONFIGSYS | $(102)\rdmsr.cmd | -d ?:\ -f $(102)\rdmsr.sys -i 1"
-         DEEXECUTE="$(102)\rdmsr.cmd | -d ?:\ -f $(102)\rdmsr.sys -i 0"
+         EXECUTE="CONFIGSYS | $(102)\drvins.cmd | -d ?:\ -f $(102)\rdmsr.sys -i 1"
+         DEEXECUTE="$(102)\drvins.cmd | -d ?:\ -f $(102)\rdmsr.sys -i 0"
          >Model-Specific Registers reader driver</PCK>
 
     <PCK INDEX=1

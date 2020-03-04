@@ -14,6 +14,10 @@ module defines itself how the items and the details pane interior will be
 drawn. Note that you can drag and drop fonts and colors onto the list, items
 and details pane.
 
+To enable Freetype 2 font engine support using the InnoTek Font Engine for OS/2
+(FT2LIB), specify the -ft2 command line switch. In this mode, some objects may
+not be displayed as intended.
+
 The SL package includes several useful utilities:
 
 cpuid.exe
@@ -25,7 +29,7 @@ cpuid.exe
 getver.exe
 
   Prints the version signature (BLDLEVEL) of the file which name is passed 
- in the parameters.
+  in the parameters.
 
 rxgetver.dll
 
@@ -39,15 +43,15 @@ sysstate.exe
   loaded libraries.
 
 
-Autor
------
+Author
+------
 
 Special thanks to: AlexT, Slavik Gnatenko, fighter4.
 
 Donations are most welcome!
-https://www.arcanoae.com/shop/os2-ports-and-applications-by-andrey-vasilkin/
 PayPal: digi@os2.snc.ru
+https://www.arcanoae.com/shop/os2-ports-and-applications-by-andrey-vasilkin/
 
-Andrey Vasilkin, 2017
+Andrey Vasilkin, 2017-2020
 E-mail: digi@os2.snc.ru
-Jabber: digi@frs.snc.ru
+http://os2.snc.ru/

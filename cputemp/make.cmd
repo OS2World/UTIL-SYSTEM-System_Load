@@ -1,68 +1,42 @@
 @echo off
+rem
+rem  This file performs a complete compilation of the project and the creation
+rem  of the installation package.
+rem  Run "make.cmd clean" to delete files created at compile time and WPI file.
+rem
 
-if .%1. == .make-wpi. goto make
-if .%1. == .make. goto make
-if .%1. == .clean. goto clean
-goto help
+set make_sw=-h -z
+if .%1. == .clean. set make_sw=-h clean & set makecmd_sw=clean
 
-:make
-set make_sw=-h -s
-set actInf=Make:
-if exist bin goto start
-md bin
-goto start
+cd src
 
-:clean
-set make_sw=-h -s clean
-set actInf=Clean:
+cd rdmsr
+wmake %make_sw%
+if errorlevel 1 goto _ExitErr
+cd ..
 
-:start
-if .%WATCOM%. == .. goto needow
+cd cputemp
+wmake %make_sw%
+if errorlevel 1 goto _ExitErr
+cd ..
 
-rem	Make binaries
-rem	=============
+cd cputemp\utility
+wmake %make_sw%
+if errorlevel 1 goto _ExitErr
+cd ..\..
 
-set components=cputemp rdmsr cput
+cd CPUtWgt
+wmake %make_sw%
+if errorlevel 1 goto _ExitErr
+cd ..
 
-echo %actInf% CPU temperature library.
+cd ..
 
-for %%i in (%components%) do echo [ component: %%i ] & cd %%i & wmake %make_sw% & cd ..
-
-if .%1. == .make-wpi. goto makeWPI
-EXIT
-
-rem	Make WarpIn package
-rem	===================
-
-:makeWPI
 cd warpin
-cmd /c make.cmd
-cd..
-cmd /c make.cmd clean
-echo.
-if exist cputemp.wpi goto WPICreatedMsg
-echo WarpIn package was NOT created.
+call make.cmd %makecmd_sw%
+cd ..
+
 EXIT
 
-:WPICreatedMsg
-echo WarpIn package cputemp.wpi created.
-EXIT
-
-
-
-:help
-echo CPU temperature library - MAKE utility.
-echo Syntax:
-echo   MAKE.CMD make
-echo   MAKE.CMD clean
-echo   MAKE.CMD make-wpi
-echo where:
-echo   make       Compile everything and put binaries in .\bin.
-echo   clean      Clean project.
-echo   make-wpi   Compile everything, create WarpIn package, clean project.
-echo.
-exit
-
-:needow
-echo Open Watcom must be installed on your system.
-exit
+:_ExitErr
+EXIT 1

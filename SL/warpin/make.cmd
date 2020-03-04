@@ -1,10 +1,56 @@
 /*
-	Installation package for WARPIN.
+	Building SystemLoad installation package.
 */
 
-WPIName = "..\sl"
+/* WPI file name */
+WPIFile = "..\SL"
+
+/*
+   List of installation package files.
+
+             PCK No   Path              File name
+*/
+call addFile   1,     ".",              "License.txt"
+call addFile   1,     ".",              "readme.txt"
+call addFile   1,     ".",              "slfld.ico"
+call addFile   1,     ".",              "slfld_o.ico"
+call addFile   1,     "..\bin",         "sl.exe"
+call addFile   100,   "..\bin",         "cpu.dll"
+call addFile   100,   "..\bin",         "cpu.hlp"
+call addFile   110,   "..\bin",         "drives.dll"
+call addFile   120,   "..\bin",         "net.dll"
+call addFile   130,   "..\bin",         "os4irq.dll"
+call addFile   140,   "..\bin",         "process.dll"
+call addFile   150,   "..\bin",         "traffic.dll"
+call addFile   150,   "..\bin",         "traffic.hlp"
+call addFile   160,   "..\bin",         "sysinfo.dll"
+call addFile   160,   "..\bin",         "sysinfo.hlp"
+call addFile   2,     "..\bin",         "cpuid.exe"
+call addFile   2,     "..\bin",         "getver.exe"
+call addFile   2,     "..\bin",         "rxgetver.dll"
+call addFile   2,     "..\bin",         "rxgetver.cmd"
+call addFile   2,     "..\bin",         "sysstate.exe"
+
+
 fileScriptInput = "script.inp"
 fileScriptOutput = "script.out"
+
+/* Query WarpIn path.
+ *
+ * Old method: warpinPath = "%osdir%\install\WARPIN"
+ */
+warpinPath = strip( SysIni( "USER", "WarpIN", "Path" ), "T", "00"x )
+if warpinPath = "ERROR:" | warpinPath = "" then
+do
+  say "WarpIN is not installed correctly"
+  exit 1
+end
+
+/* We make the script directory current. */
+parse source os cmd scriptPath
+savePath = directory()
+scriptPath = left( scriptPath, lastpos( "\", scriptPath ) - 1 )
+call directory scriptPath
 
 
 if RxFuncQuery('SysLoadFuncs') then
@@ -13,40 +59,79 @@ do
   call SysLoadFuncs
 end
 
+
+parse arg sw
+if sw = "clean" then
+do
+  fullname = stream( WPIFile || ".wpi", "c", "query exists" )
+  if fullname \= "" then
+    call SysFileDelete fullname
+  call exitScript 0
+end
+
+
+do idx = 1 to InsFiles.0
+  fullname = stream( InsFiles.idx._path || "\" || InsFiles.idx._name, ,
+                     "c", "query exists" )
+  if fullname = "" then
+  do
+    say "File " || InsFiles.idx._path || "\" || InsFiles.idx._name || ,
+        " does not exist."
+    say "Was the project compiled?"
+    call exitScript 1
+  end
+end
+
 /* Substitution versions of the components (from BLDLEVEL signatures) in   */
 /* the script. Reads file fileScriptInput and makes file fileScriptOutput  */
 /* Replaces all switches "<!-- BL:D:\path\program.exe -->" with version of */
 /* D:\path\program.exe (bldlevel signature uses).                          */
 if makeScript( fileScriptInput, fileScriptOutput ) = 0 then
-  exit
+  call exitScript 2
+
 
 /* Building installation package. */
 
-call SysFileDelete WPIName || ".wpi"
+call SysFileDelete WPIFile || ".wpi"
 
-"set beginlibpath=%osdir%\install\WARPIN"
+cmd = "@"warpinPath || "\WIC.EXE " || WPIFile || " -a"
+do idx = 1 to InsFiles.0
+  cmd = cmd || " " || InsFiles.idx._pckno || " -c" || InsFiles.idx._path || ,
+        " " || InsFiles.idx._name
+end
+cmd = cmd || " -s " || fileScriptOutput
 
-"%osdir%\install\WARPIN\WIC.EXE " || WPIName || " -a " || ,
-"1 License.txt 1 readme.txt 1 slfld.ico 1 slfld_o.ico " || ,
-"1 -c..\bin sl.exe " || ,
-"100 -c..\bin cpu.dll cpu.hlp " || ,
-"110 -c..\bin drives.dll " || ,
-"120 -c..\bin net.dll " || ,
-"130 -c..\bin os4irq.dll " || ,
-"140 -c..\bin process.dll " || ,
-"150 -c..\bin traffic.dll traffic.hlp " || ,
-"160 -c..\bin sysinfo.dll sysinfo.hlp " || ,
-"2 -c..\bin cpuid.exe getver.exe rxgetver.dll rxgetver.cmd sysstate.exe cputemp.exe " || ,
-"-s " || fileScriptOutput
+"@set beginlibpath=" || warpinPath
+cmd
+
 
 call SysFileDelete fileScriptOutput
-EXIT
+
+/* Check that the installation file is created. */
+fileHwExpWPI = stream( WPIFile || ".wpi", "c", "query exists" )
+if fileHwExpWPI = "" then
+  call exitScript 3
+
+say "WPI file created: " || fileHwExpWPI
+
+/* Success, rc = 0 */
+call exitScript 0
+
+
+addFile:
+  if symbol( "InsFiles.0" ) \= "VAR"
+    then __idx = 1
+    else __idx = InsFiles.0 + 1
+
+  parse arg InsFiles.__idx._pckno, InsFiles.__idx._path, InsFiles.__idx._name
+  InsFiles.0 = __idx
+return
 
 makeScript: PROCEDURE
   fileInput = arg(1)
   fileOutput = arg(2)
 
-  if RxFuncQuery( "gvLoadFuncs" ) then
+/*  if RxFuncQuery( "gvLoadFuncs" ) then*/
   do
     call RxFuncAdd "gvLoadFuncs", "RXGETVER", "gvLoadFuncs"
     call gvLoadFuncs
@@ -97,3 +182,7 @@ makeScript: PROCEDURE
     call SysFileDelete fileOutput
     
   return resOk
+
+exitScript: PROCEDURE expose savePath
+  call directory savePath
+  exit arg( 1 )

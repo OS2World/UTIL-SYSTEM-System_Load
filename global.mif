@@ -1,0 +1,164 @@
+#
+# This Open Watcom Make include file is used to build all components.
+#
+
+# --------------------------[ User settings ]--------------------------
+
+# OS2TK45PATH - path to the IBM OS/2 Developer's Toolkit Version 4.5.
+OS2TK45PATH = D:\dev\OS2TK45
+
+# DDKPATH - path to the IBM Developer Connection Device Driver Kit for OS/2.
+DDKPATH = D:\dev\DDK
+
+# OWPATH - open Watcom path. Uncomment if you do not have the %WATCOM%
+# environment variable or want to specify an alternative path.
+#OWPATH = D:\dev\watcom
+
+# DDK4PATH - used only to compile the rdmsr.sys driver.
+# The driver will not be recompiled and will not be deleted during cleaning if
+# this variable is not specified.
+#DDK4PATH = D:\dev\DDK4
+
+# XWPINCPATH - the path to the 'include' directories of XWP and XWP helpers.
+# Used only to compile the XCenter Intel CPU Temperature widget.
+XWPINCPATH = $(%HOME)\projects\xwp\xworkplace\branch-1-0\include;
+XWPINCPATH +=$(%HOME)\projects\xwp\xwphelpers\branch-1-0\include
+
+# Uncomment the following line to overwrite the value set in the called file.
+# You need to run WMAKE clean / WMAKE to switch to/from the debug version.
+#DEBUGCODE = no
+
+# Uncomment the following line to use Resource Compiler from IBM OS/2
+# Developer's Toolkit instead of Open Watcom Resource Compiler.
+#USE_TOOLKIT_RC=1
+
+# ---------------------------------------------------------------------
+
+
+
+.SILENT
+
+# General variables (no need to change here)
+# ------------------------------------------
+
+
+!ifndef OWPATH
+!ifndef %WATCOM
+!error You need to set the OWPATH variable in the globals.mif file.
+!endif
+OWPATH = $(%WATCOM)
+!endif
+
+# It may be overwritten in the called makefile.
+!ifndef AUTHOR
+AUTHOR = Andrey Vasilkin
+!endif
+
+# It must be overwritten in the called makefile.
+!ifndef COMMENT
+COMMENT = SystemLoad
+!endif
+
+# It must be overwritten in the called makefile.
+!ifndef VER_REVISION
+VER_MAJOR    = 0
+VER_MINOR    = 0
+VER_REVISION = 0
+!endif
+
+# Version string
+VERSION = $(VER_MAJOR).$(VER_MINOR).$(VER_REVISION)
+
+# Comment line for the bldlevel information
+!ifeq DEBUGCODE yes
+BLCOMMENT = $(COMMENT) (debug)
+!else
+BLCOMMENT = $(COMMENT)
+!endif
+
+# Include path
+INCPATH +=$(OWPATH)\H\OS2;$(OWPATH)\H;
+INCPATH +=$(OS2TK45PATH)\h;
+INCPATH +=$(DDKPATH)\base\h;
+
+# Libraries path
+LIBPATH +=$(OS2TK45PATH)\lib;$(OWPATH)\lib386;$(OWPATH)\lib386\os2
+
+# The list of .obj files from the .c files (SRCS defined in the called
+# makefile).
+OBJS = $(SRCS:.c=.obj)
+
+!ifdef RCFILE
+RESFILE = $(RCFILE:.rc=.res)
+!endif
+
+!ifdef IPFFILE
+HLPFILE = $(IPFFILE:.ipf=.hlp)
+!endif
+
+
+# Compilers and utilites
+# ----------------------
+
+# C Compiler
+CC = $(OWPATH)\binp\wcc386.exe
+CC16 = $(OWPATH)\binp\wcc.exe
+
+# C Compiler flags. The line can be supplemented in the called file.
+CFLAGS += -i=$(INCPATH) -bt=os2 -q -d0 -w2
+!ifeq DEBUGCODE yes
+CFLAGS += -DDEBUG_FILE="$(DBGFILE)"
+!endif
+
+# Assembler Compiler
+ASMC = $(OWPATH)\binp\wasm.exe
+
+# Linker
+LINK = $(OWPATH)\binp\wlink.exe
+
+# Importing libraries: Generating a LIB file from a DLL.
+# IMPLIB = emximp -o
+IMPLIB = $(OWPATH)\binp\wlib -b -n -q
+
+# Information Presentation Facility Compiler from IBM OS/2 Developer's Toolkit.
+IPFC = $(OS2TK45PATH)\bin\ipfc.exe
+
+# Resource Compiler
+!ifdef USE_TOOLKIT_RC
+# You can use Resource Compiler from IBM OS/2 Developer's Toolkit.
+RCC = $(OS2TK45PATH)\bin\rc16 -r -n -x2
+RCL = $(OS2TK45PATH)\bin\rc16 -n
+!else
+# Open Watcom Resource Compiler Version 2.0 beta must be used. Older versions
+# creates incorrect .RES files.
+RCC = $(OWPATH)\binp\wrc.exe -q -r
+RCL = $(OWPATH)\binp\wrc.exe -q
+!endif
+
+# Make date.exe utility fullpath (optional)
+!ifdef %osdir
+DATEUTIL = $(%osdir)\KLIBC\BIN\date.exe
+!else ifdef %unixroot
+DATEUTIL = $(%unixroot)\usr\libexec\bin\date.exe
+!endif
+
+# Utility for compressing executable files
+LXLITE = lxlite.exe
+
+INFLINK = echo * Linking: $^.
+
+
+# Implicit Rules
+# --------------
+
+.EXTENSIONS:
+.EXTENSIONS: .exe .dll .obj .lib .res .hlp .c .c16 .cpp .asm .rc .ipf
+
+.c.obj: .AUTODEPEND
+  $(CC) $[* $(CFLAGS)
+
+.rc.res: .AUTODEPEND
+  $(RCC) $[@ $^@
+
+.ipf.hlp:
+  $(IPFC) $[@ $^@ >nul
